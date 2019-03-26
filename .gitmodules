@@ -1,0 +1,3 @@
+[submodule "omni_torch"]
+	path = omni_torch
+	url = https://github.com/loveorchids/omni_torch
