@@ -28,6 +28,10 @@ Recommand to use PyCharm to do the job also
 Modify code under:
 * tb_data.py
 > Defines the pipeline of loading data and some basic loading methods
+> Following files does not need to be changed:
+> get_path_and_label,
+> extract_bbox, parse_file, detection_collector 
+> 
 *  tb_pre_processing.py
 > Defines all the pre-process functions
 * tb_augment.py

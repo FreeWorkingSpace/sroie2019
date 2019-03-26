@@ -20,7 +20,7 @@ def aug_sroie():
     return aug_list
 
 
-def aug_tempholding():
+def aug_old():
     aug_list = []
     aug_list.append(augmenters.Crop(percent=0.25, sample_independently=True, keep_size=False))
     aug_list.append(augmenters.Resize(size={"height": 1024, "width": "keep-aspect-ratio"}))
