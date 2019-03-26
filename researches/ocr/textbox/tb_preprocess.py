@@ -188,7 +188,7 @@ def estimate_angle_and_crop_area(signal, args, path, seed, size, device=None):
     return img, transform_det
 
 
-def clahe_inv(img):
+def clahe_inv(img, args, path, seed, size):
     img = cv2.fastNlMeansDenoisingColored(img, None, 10, 10, 1, 3)
     lab = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
     lab_planes = cv2.split(lab)
