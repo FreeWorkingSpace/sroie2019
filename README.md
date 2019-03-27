@@ -91,6 +91,20 @@ torch.Size([69632, 4])
 # Running in Terminal
 cd ~/Documents/sroie2019/researches/ocr/textbox
 python3 tb_preprocess.py
+
+Output should be similar to: 
+(1013, 441, 3) <= 图片输入尺寸
+(512, 512, 3) <= 图片输出尺寸
+/home/wang/Pictures/dataset/ocr/SROIE2019/0001.jpg cost 0.291 seconds <= 路径和所需时间
+(1004, 420, 3)
+(512, 512, 3)
+/home/wang/Pictures/dataset/ocr/SROIE2019/0002.jpg cost 0.139 seconds
+(957, 471, 3)
+(512, 512, 3)
+/home/wang/Pictures/dataset/ocr/SROIE2019/0003.jpg cost 0.167 seconds
+(933, 436, 3)
+(512, 512, 3)
+/home/wang/Pictures/dataset/ocr/SROIE2019/0004.jpg cost 0.151 seconds
 ```
 
 #### 3-2. Check prior box(default boxes)

@@ -118,7 +118,7 @@ def estimate_angle_and_crop_area(signal, args, path, seed, size, device=None):
     ascend_kernel = (0.0, 0.25, 0.5, 0.75, 1.0)
     descend_kernel = (1.0, 0.75, 0.5, 0.25, 0.0)
     # Use CLAHE to enhance the contrast
-    signal = clahe_inv(signal)
+    signal = clahe_inv(signal, args, path, seed, size)
     original_size = signal.shape
     # Resize to small image for detect rotation angle
     width = original_size[1] / original_size[0] * 500
