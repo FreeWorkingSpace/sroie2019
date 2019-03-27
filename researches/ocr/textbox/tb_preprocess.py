@@ -81,7 +81,7 @@ def eatimate_angle(signal, args, path, seed, size, device=None):
     #_signal = cv2.resize(signal, (int(width), 1000))
     angle = detect_angle(signal)
     if angle is not None and abs(angle) * 90 > 1:
-        print("angle: %s"%angle)
+        #print("angle: %s"%angle)
         transform_det.update({"rotation": angle * 90})
     return signal, transform_det
 
@@ -179,7 +179,7 @@ def estimate_angle_and_crop_area(signal, args, path, seed, size, device=None):
             start.append(0)
             end.append(signal.size(-1))
     if angle is not None and abs(angle) * 90 > 1:
-        print("angle: %s"%(angle))
+        #print("angle: %s"%(angle))
         transform_det.update({"rotation": angle * 90})
     # 4 dimension means distance to top, right, bottom, left
     crop_area = (start[1], int(original_size[1] - end[0]), int(original_size[0] - end[1]), int(start[0]))
