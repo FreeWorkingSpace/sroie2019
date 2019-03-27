@@ -43,7 +43,7 @@ If the function is not described, means you do not need to change its content, o
 
 ### 1. Modify code for loading data 
 #### 1.1 tb_data.py
-函数名：**fetch_detection_data**<br>
+1.1.1 函数：**fetch_detection_data**<br>
 初始化数据集时可以更改pre-process和augmentation两项<br>
 **subset = Arbitrary_Dataset(args,... , pre_process=[eatimate_angle], augmentation=[aug_sroie()])**<br>
 * **pre-process**的候选函数在tb_preprocess.py中定义, 分别为: <br>
@@ -57,9 +57,9 @@ If the function is not described, means you do not need to change its content, o
 ### 2. Modify code for model architecture
 #### 2.1 tb_model.py
 
-变量名：
-**cfg**, 更改的方法参照代码中的注释<br>
-**SSD的模型的更改**<br>
+
+2.1.1. cfg更改的方法参照代码中的注释<br>
+2.1.2. SSD的模型的更改: <br>
 * 在初始化SSD模型时，有一个默认参数名为connect_loc_to_conf=False，将其设置为True可以使
 localization layer的输出与confidence layer相结合，让confidence layer的预测更加准确。
 * 在调节完模型的参数后，直接运行tb_model.py来检查是否模型可以正常运行
@@ -81,7 +81,7 @@ torch.Size([69632, 4])
 ```
 
 #### 2.2 tb_utils.py
-函数名：**jaccard & intersect**<br>
+2.2.1 函数名：**jaccard & intersect**<br>
 * 更改他们可以改变计算jaccard distance的方式，目前在匹配的时候比较容易出现横向的错位，也许可以找到更好的计算匹配的模式
 
 ### 3. Check your Modification
