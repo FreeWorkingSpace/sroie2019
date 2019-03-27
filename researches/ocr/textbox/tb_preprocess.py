@@ -204,6 +204,9 @@ def clahe_inv(img, args, path, seed, size):
     return img
 
 
+def refine_dataset():
+    return
+
 if __name__ == "__main__":
     def prepare_aug(transform_det):
         aug_list = []
