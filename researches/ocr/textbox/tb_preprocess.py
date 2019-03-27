@@ -202,7 +202,7 @@ def clahe_inv(img, args, path, seed, size):
     img = cv2.cvtColor(lab, cv2.COLOR_LAB2BGR)
     #img = cv2.bilateralFilter(img, 5, 1, 1)
     return img
-    
+
 
 if __name__ == "__main__":
     def prepare_aug(transform_det):
