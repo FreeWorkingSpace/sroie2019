@@ -41,8 +41,8 @@ python3 textbox.py
 ## Hyperparamater Tuning
 If the function is not described, means you do not need to change its content, or changing the content does not have the potential to improve result.
 
-###Modify code for loading data 
-#### tb_data.py
+### 1. Modify code for loading data 
+#### 1.1 tb_data.py
 函数名：**fetch_detection_data**<br>
 初始化数据集时可以更改pre-process和augmentation两项<br>
 **subset = Arbitrary_Dataset(args,... , pre_process=[eatimate_angle], augmentation=[aug_sroie()])**<br>
@@ -54,8 +54,8 @@ If the function is not described, means you do not need to change its content, o
 * **augmentation**的候选在tb_augment.py中定义, 现在仅有: aug_sroie() 一项<br>
 
 
-### Modify code for model architecture
-#### tb_model.py
+### 2. Modify code for model architecture
+#### 2.1 tb_model.py
 
 变量名：
 **cfg**, 更改的方法参照代码中的注释<br>
@@ -80,12 +80,12 @@ torch.Size([2, 69632, 2])
 torch.Size([69632, 4])
 ```
 
-#### tb_utils.py
+#### 2.2 tb_utils.py
 函数名：**jaccard & intersect**<br>
 * 更改他们可以改变计算jaccard distance的方式，目前在匹配的时候比较容易出现横向的错位，也许可以找到更好的计算匹配的模式
 
 ### 3. Check your Modification
-#### 3-1. Check augmentation
+#### 3.1 Check augmentation
 直接运行tb_preprocess.py，会将augment后的图片保存在~/Pictures文件夹下
 ```
 # Running in Terminal
@@ -107,7 +107,7 @@ Output should be similar to:
 /home/wang/Pictures/dataset/ocr/SROIE2019/0004.jpg cost 0.151 seconds
 ```
 
-#### 3-2. Check prior box(default boxes)
+#### 3.2 Check prior box(default boxes)
 取消textbox.py中函数fit里的visualize_bbox(args, cfg, image, targets, prior)的注释，便能够将可视化出来的图片保存在~/Pictures文件夹下
 
 
