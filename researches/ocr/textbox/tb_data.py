@@ -81,15 +81,15 @@ def detection_collector(batch):
 
 
 def fetch_detection_data(args, sources, auxiliary_info, batch_size, batch_size_val=None,
-                         shuffle=True, split_val=0.0, k_fold=1):
+                         shuffle=True, split_val=0.0, k_fold=1, pre_process=None, aug=None):
     if batch_size_val is None:
         batch_size_val = batch_size
     dataset = []
     for i, source in enumerate(sources):
         subset = Arbitrary_Dataset(args, sources=[source], step_1=[get_path_and_label],
                                    step_2=[omth_loader.read_image], bbox_loader=[extract_bbox],
-                                   auxiliary_info=[auxiliary_info[i]], pre_process=[eatimate_angle],
-                                   augmentation=[aug_sroie()])
+                                   auxiliary_info=[auxiliary_info[i]], pre_process=[pre_process],
+                                   augmentation=[aug])
         subset.prepare()
         dataset.append(subset)
 

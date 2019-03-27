@@ -10,9 +10,12 @@ import researches.ocr.textbox.tb_preset as preset
 import researches.ocr.textbox.tb_model as model
 from researches.ocr.textbox.tb_loss import MultiBoxLoss
 from researches.ocr.textbox.tb_utils import *
+from researches.ocr.textbox.tb_preprocess import *
+from researches.ocr.textbox.tb_augment import *
 from researches.ocr.textbox.tb_vis import visualize_bbox, print_box
 from omni_torch.networks.optimizer.adabound import AdaBound
 import omni_torch.visualize.basic as vb
+
 
 TMPJPG = os.path.expanduser("~/Pictures/tmp.jpg")
 cfg = model.cfg
@@ -108,8 +111,9 @@ def measure(pred_boxes, gt_boxes):
 
 def main():
     datasets = data.fetch_detection_data(args, sources=args.train_sources, k_fold=1,
-                                        batch_size=args.batch_size, batch_size_val=1,
-                                        auxiliary_info=args.train_aux, split_val=0.2)
+                                         batch_size=args.batch_size, batch_size_val=1,
+                                         auxiliary_info=args.train_aux, split_val=0.2,
+                                         pre_process=eatimate_angle, aug=aug_sroie())
     for idx, (train_set, val_set) in enumerate(datasets):
         loc_loss, conf_loss = [], []
         accuracy, precision, recall, f1_score = [], [], [], []
