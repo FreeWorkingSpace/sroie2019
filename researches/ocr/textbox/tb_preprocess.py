@@ -219,26 +219,6 @@ if __name__ == "__main__":
         aug = augmenters.Sequential(aug_list, random_order=False)
         return aug
 
-    def augmentation():
-        aug_list = []
-        stage_0, stage_1, stage_2, stage_3 = 1536, 2048, 768, 512
-        # Pad the height to stage_0
-        aug_list.append(augmenters.PadToFixedSize(width=1, height=stage_0, pad_cval=255))
-        # Resize its height to stage_1, note that stage_0 is smaller than stage_1
-        # so that the font size could be increased for most cases.
-        aug_list.append(augmenters.Resize(size={"height": stage_1, "width": "keep-aspect-ratio"}))
-        # Crop a stage_2 x stage_2 area
-        aug_list.append(augmenters.CropToFixedSize(width=stage_2, height=stage_2))
-        # In case the width is not enough, pad it to stage_2 x stage_2
-        aug_list.append(augmenters.PadToFixedSize(width=stage_2, height=stage_2, pad_cval=255))
-        # Resize to stage_3 x stage_3
-        aug_list.append(augmenters.Resize(size={"height": stage_3, "width": stage_3}))
-        # Perform Flip
-        # aug_list.append(augmenters.Fliplr(args.h_flip_prob, name="horizontal_flip"))
-        # aug_list.append(augmenters.Flipud(args.v_flip_prob, name="vertical_flip"))
-        aug = augmenters.Sequential(aug_list, random_order=False)
-        return aug
-
     def sroie_data_summary():
         width_max = 0
         width_min = 999999
@@ -271,12 +251,13 @@ if __name__ == "__main__":
     import time
     from imgaug import augmenters
     import researches.ocr.textbox.tb_preset as preset
+    import researches.ocr.textbox.tb_augment as augment
     from random import shuffle
     #sroie_data_summary()
     args = util.get_args(preset.PRESET)
     start = 0
     i = 0
-    aug = augmentation()
+    aug = augmenters.Sequential(augment.aug_sroie())
     img_files = sorted(glob.glob(os.path.expanduser("~/Pictures/dataset/ocr/SROIE2019/*.jpg")))
     #img_files = sorted(glob.glob(os.path.expanduser("~/Pictures/sroie_typical/*.jpg")))
     #shuffle(img_files)
@@ -290,9 +271,9 @@ if __name__ == "__main__":
         img, det = estimate_angle_and_crop_area(img, args, None, None, None, device="cpu")
         transform = prepare_aug(det)
         img = transform.augment_image(img)
-        #print(img.shape)
-        #img = aug.augment_image(img)
-        #print(img.shape)
+        print(img.shape)
+        img = aug.augment_image(img)
+        print(img.shape)
         cv2.imwrite(os.path.expanduser("~/Pictures/%s.jpg" % (num)), img)
         print("%s cost %.3f seconds"%(img_file, time.time() - start_time))
         pass

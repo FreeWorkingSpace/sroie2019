@@ -8,10 +8,10 @@ import researches.ocr.textbox as init
 from researches.ocr.textbox.tb_utils import *
 
 cfg_300 = {
+    # Configuration for 300x300 input image
     'num_classes': 2,
     'feature_map_sizes': [38, 19, 10],
     'input_img_size': 300,
-    'zoom_level': [8, 16],
     'box_height': [15, 25],
     'box_ratios': [[1, 2, 4, 7, 11, 16, 20], [1, 2, 5, 9, 14]],
     'box_height_large': [20, 32],
@@ -26,30 +26,47 @@ cfg_300 = {
     'alpha_updater': 1,
     'overlap_thresh': 0.65,
     'clip': True,
-    'name': 'VOC',
 }
 
 cfg = {
+    # Configuration for 512x512 input image
     'num_classes': 2,
+    # Which conv layer output to use
+    # The program create the prior box according to the length of conv_output
+    # As long as its length does not exceed the length of other value
+    # e.g. feature_map_sizes, box_height, box_height_large
+    # Then it will be OK
+    'conv_output': ["conv_4", "conv_5"],
     'feature_map_sizes': [64, 32, 32],
     'input_img_size': 512,
-    'zoom_level': [8, 16, 32],
-    'box_height': [16, 26, 36],
+    # See the visualization result by enabling visualize_bbox in function fit of textbox.py
+    # And change the settings according to the result
+    # Some possible settings of box_height and box_height_large
+    # 'box_height': [[16], [26], [36]],
+    # 'box_height': [[10, 16], [26], [36]],
+    # 'box_height': [[16], [26], []],
+    'box_height': [[16], [26], [36]],
     'box_ratios': [[2, 4, 7, 11, 16, 20, 26], [1, 2, 5, 9, 14, 20], [1, 2, 5, 9, 12]],
-    'box_height_large': [20, 34, 42],
-    'box_ratios_large': [[1, 2, 4, 7, 11, 15, 20], [0.5, 1, 3, 6, 10, 15], [1, 3, 5, 9]],
-    'stride': [1, 1, 1],
-    'loc_and_conf': [512, 512, 1024],
-    'conv_output': ["conv_4", "conv_5"],
+    # If big_box is True, then box_height_large and box_ratios_large will be used
     'big_box': True,
+    'box_height_large': [[20], [34], [42, 50]],
+    'box_ratios_large': [[1, 2, 4, 7, 11, 15, 20], [0.5, 1, 3, 6, 10, 15], [1, 3, 5, 9]],
+    # You can increase the stride when feature_map_size is large
+    # especially at swallow conv layers, so as not to create lots of prior boxes
+    'stride': [1, 1, 1],
+    # Input depth for location and confidence layers
+    'loc_and_conf': [512, 512, 1024],
+    # The hyperparameter to decide the Loss
     'variance': [0.1, 0.2],
     'var_updater': 1,
     'alpha': 1,
     'alpha_updater': 1,
+    # Jaccard Distance Threshold
     'overlap_thresh': 0.6,
+    # Whether to constrain the prior boxes inside the image
     'clip': True,
-    'name': 'VOC',
 }
+
 
 class Detect(Function):
     """At test time, Detect is the final layer of SSD.  Decode location preds,
@@ -57,6 +74,7 @@ class Detect(Function):
     scores and threshold to a top_k number of output predictions for both
     confidence score and locations.
     """
+
     def __init__(self, num_classes, bkg_label, top_k, conf_thresh, nms_thresh):
         self.num_classes = num_classes
         self.background_label = bkg_label
@@ -110,7 +128,8 @@ class Detect(Function):
 
 
 class SSD(nn.Module):
-    def __init__(self, cfg, in_channel=512, batch_norm=nn.BatchNorm2d, test_phase=False):
+    def __init__(self, cfg, in_channel=512, batch_norm=nn.BatchNorm2d, fix_size=True,
+                 connect_loc_to_conf=False):
         super().__init__()
         self.cfg = cfg
         self.num_classes = cfg['num_classes']
@@ -123,8 +142,9 @@ class SSD(nn.Module):
         self.conv_module_name = []
         self.softmax = nn.Softmax(dim=-1)
         self.detect = Detect(self.num_classes, 0, 200, 0.01, 0.45)
-        self.test = test_phase
-        self.prior = self.prior().cuda()
+        self.connect_loc_to_conf = connect_loc_to_conf
+        if fix_size:
+            self.prior = self.prior().cuda()
 
         # Prepare VGG-16 net with batch normalization
         vgg16_model = vgg16_bn(pretrained=True)
@@ -148,7 +168,7 @@ class SSD(nn.Module):
         # Extra Layers
         self.conv_module_name.append("extra_1")
         self.conv_module.append(omth_blocks.conv_block(in_channel, [1024, 1024],
-                                                       kernel_sizes=[3, 1], stride=[1, 1],padding=[3, 0],
+                                                       kernel_sizes=[3, 1], stride=[1, 1], padding=[3, 0],
                                                        dilation=[3, 1], batch_norm=batch_norm))
         self.conv_module_name.append("extra_2")
         self.conv_module.append(omth_blocks.conv_block(1024, [256, 512], kernel_sizes=[1, 3],
@@ -157,33 +177,40 @@ class SSD(nn.Module):
         # Location and Confidence Layer
         for i, in_channel in enumerate(cfg['loc_and_conf']):
             anchor = calculate_anchor_number(cfg, i)
-
+            # Create Location Layer
             loc_layer = omth_blocks.conv_block(in_channel, filters=[in_channel, int(in_channel / 2), anchor * 4],
-                                               kernel_sizes=[1, 3, 3], stride=[1, 1, cfg['stride'][i]], padding=[0, 1, 1], 
+                                               kernel_sizes=[1, 3, 3], stride=[1, 1, cfg['stride'][i]],
+                                               padding=[0, 1, 1],
                                                activation=None)
             loc_layer.apply(init.init_cnn)
             self.loc_layers.append(loc_layer)
-            conf_layer = omth_blocks.conv_block(in_channel, filters=[in_channel, int(in_channel / 2), anchor * 2],
-                                               kernel_sizes=[1, 3, 3], stride=[1, 1, cfg['stride'][i]], padding=[0, 1, 1],
-                                               activation=None)
-            conf_layer.apply(init.init_cnn)
-            self.conf_layers.append(conf_layer)
-            """
-            # produce the confidence after location offset was provided
-            conf_concat = omth_blocks.conv_block(int(in_channel / 4) + anchor * 4,
-                                                 filters=[int(in_channel / 4), anchor * 2], kernel_sizes=[3, 3],
-                                                 stride=[1, cfg['stride'][i]], padding=[1, 1], activation=None)
-            conf_concat.apply(init.init_cnn)
-            self.conf_concate.append(conf_concat)
-            
-            self.loc_layers.append(nn.Conv2d(in_channel, anchor * 4, kernel_size=3,
-                                             stride=cfg['stride'][i], padding=1))
-            self.conf_layers.append(nn.Conv2d(in_channel, anchor * self.num_classes, kernel_size=3,
-                                              stride=cfg['stride'][i], padding=1))
-            """
-
+            # Create Confidence Layer
+            if self.connect_loc_to_conf:
+                conf_layer = omth_blocks.conv_block(in_channel, filters=[in_channel, int(in_channel / 2)],
+                                                    kernel_sizes=[1, 3], stride=[1, 1], padding=[0, 1], activation=None)
+                conf_layer.apply(init.init_cnn)
+                self.conf_layers.append(conf_layer)
+                # In this layer, the output from loc_layer will be concatenated to the conf layer
+                # Feeding the conf layer with regressed location, helping the conf layer
+                # to get better prediction
+                conf_concat = omth_blocks.conv_block(int(in_channel / 2) + anchor * 4,
+                                                     filters=[int(in_channel / 4), anchor * 2], kernel_sizes=[1, 3],
+                                                     stride=[1, cfg['stride'][i]], padding=[0, 1], activation=None)
+                conf_concat.apply(init.init_cnn)
+                self.conf_concate.append(conf_concat)
+            else:
+                conf_layer = omth_blocks.conv_block(in_channel, filters=[in_channel, int(in_channel / 2), anchor * 2],
+                                                    kernel_sizes=[1, 3, 3], stride=[1, 1, cfg['stride'][i]],
+                                                    padding=[0, 1, 1], activation=None)
+                conf_layer.apply(init.init_cnn)
+                self.conf_layers.append(conf_layer)
 
     def parallel_prior(self):
+        """
+        Create the prior in parallel manner, old version, do not use
+        Useful when the input image size is not fixed
+        Thus for each input image, prior boxes will be generated accordingly
+        """
         def generate_grid(h, w, f_k, n):
             x = np.expand_dims(np.linspace(0, h - 1, h), 0)
             y = np.expand_dims(np.linspace(0, w - 1, w), 0)
@@ -237,44 +264,46 @@ class SSD(nn.Module):
                 h_stride, w_stride = self.cfg['stride'][k][0], self.cfg['stride'][k][1]
             else:
                 h_stride, w_stride = self.cfg['stride'][k], self.cfg['stride'][k]
-            f_k = self.img_size / self.cfg['zoom_level'][k]
-            s_k = self.cfg['box_height'][k] / self.img_size
-            s_k_big = self.cfg['box_height_large'][k] / self.img_size
             for i, j in product(range(0, h, h_stride), range(0, w, w_stride)):
-                cx = (j + 0.5) / f_k
-                cy = (i + 0.5) / f_k
-                # Apply different aspect ratio for small boxes
-                for ar in self.cfg['box_ratios'][k]:
-                    mean += [cx, cy, s_k * ar, s_k]
+                cx = (j + 0.5) / w
+                cy = (i + 0.5) / h
+                # Add prior boxes with different height and aspect-ratio
+                for height in self.cfg['box_height'][k]:
+                    s_k = height / self.img_size
+                    for ar in self.cfg['box_ratios'][k]:
+                        mean += [cx, cy, s_k * ar, s_k]
                 if big_box:
-                    for ar in self.cfg['box_ratios_large'][k]:
-                        mean += [cx, cy, s_k_big * ar, s_k_big]
+                    for height in self.cfg['box_height_large'][k]:
+                        s_k_big = height / self.img_size
+                        for ar in self.cfg['box_ratios_large'][k]:
+                            mean += [cx, cy, s_k_big * ar, s_k_big]
         # back to torch land
         output = torch.Tensor(mean).view(-1, 4)
         if self.cfg['clip']:
             output.clamp_(max=1, min=0)
         return output
 
-    def forward(self, x, is_train=True, debug=False):
+    def forward(self, x, is_train=True, verbose=False):
         locations, confidences, conv_output = [], [], []
         for i, conv_layer in enumerate(self.conv_module):
             x = conv_layer(x)
             if self.conv_module_name[i] in self.output_list:
                 conv_output.append(x)
-                if debug:
+                if verbose:
                     print("CNN output shape: %s" % (str(x.shape)))
                 if len(conv_output) == len(self.output_list):
-                    # Doesn't need any further conv operation
+                    # Doesn't need to compute further convolutional output
                     break
         for i, x in enumerate(conv_output):
             loc = self.loc_layers[i](x)
             locations.append(loc.permute(0, 2, 3, 1).contiguous().view(loc.size(0), -1, 4))
-            #_loc = loc.detach()
             conf = self.conf_layers[i](x)
-            #conf = torch.cat([conf, _loc], dim=1)
-            #conf = self.conf_concate[i](conf)
+            if self.connect_loc_to_conf:
+                _loc = loc.detach()
+                conf = torch.cat([conf, _loc], dim=1)
+                conf = self.conf_concate[i](conf)
             confidences.append(conf.permute(0, 2, 3, 1).contiguous().view(conf.size(0), -1, self.num_classes))
-            if debug:
+            if verbose:
                 print("Loc output shape: %s\nConf output shape: %s" % (str(loc.shape), str(conf.shape)))
         locations = torch.cat(locations, dim=1)
         confidences = torch.cat(confidences, dim=1)
@@ -287,9 +316,9 @@ class SSD(nn.Module):
 
 if __name__ == "__main__":
     x = torch.randn(2, 3, 512, 512).to("cuda")
-    print(cfg)
-    ssd = SSD(cfg).to("cuda")
-    loc, conf, prior = ssd(x, debug=True)
+    #print(cfg)
+    ssd = SSD(cfg, connect_loc_to_conf=True).to("cuda")
+    loc, conf, prior = ssd(x, verbose=True)
     print(loc.shape)
     print(conf.shape)
     print(prior.shape)
