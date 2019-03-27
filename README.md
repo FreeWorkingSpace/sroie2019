@@ -79,7 +79,6 @@ torch.Size([2, 69632, 4])
 torch.Size([2, 69632, 2])
 torch.Size([69632, 4])
 ```
-
 #### 2.2 tb_utils.py
 2.2.1 函数名：**jaccard & intersect**<br>
 * 更改他们可以改变计算jaccard distance的方式，目前在匹配的时候比较容易出现横向的错位，也许可以找到更好的计算匹配的模式
