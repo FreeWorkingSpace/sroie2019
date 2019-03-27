@@ -215,6 +215,7 @@ def refine_dataset(args, path):
     dataset = dataset[0][0]
     for batch_idx, (image, targets) in enumerate(dataset):
         name = str(batch_idx+1).zfill(4)
+        print(name)
         image = vb.plot_tensor(args, image, deNormalize=True, margin=0)
         h, w, c = image.shape
         targets = targets[0][:, :4]
