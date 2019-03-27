@@ -83,7 +83,7 @@ def eatimate_angle(signal, args, path, seed, size, device=None):
     #_signal = cv2.resize(signal, (int(width), 1000))
     angle = detect_angle(signal)
     if angle is not None and abs(angle) * 90 > 1:
-        #print("angle: %s"%angle)
+        print("angle: %s"%angle)
         transform_det.update({"rotation": angle * 90})
     return signal, transform_det
 
@@ -181,7 +181,7 @@ def estimate_angle_and_crop_area(signal, args, path, seed, size, device=None):
             start.append(0)
             end.append(signal.size(-1))
     if angle is not None and abs(angle) * 90 > 1:
-        #print("angle: %s"%(angle))
+        print("angle: %s"%(angle))
         transform_det.update({"rotation": angle * 90})
     # 4 dimension means distance to top, right, bottom, left
     crop_area = (start[1], int(original_size[1] - end[0]), int(original_size[0] - end[1]), int(start[0]))
@@ -211,15 +211,17 @@ def refine_dataset(args, path):
     import researches.ocr.textbox.tb_data as data
     dataset = data.fetch_detection_data(args, sources=args.train_sources, k_fold=1,
                                          batch_size=1, batch_size_val=1, auxiliary_info=args.train_aux, split_val=0,
-                                         pre_process=estimate_angle_and_crop_area, aug=None, shuffle=False)
+                                         pre_process=None, aug=None, shuffle=False)
     dataset = dataset[0][0]
     for batch_idx, (image, targets) in enumerate(dataset):
+        if batch_idx < 24:
+            continue
         name = str(batch_idx+1).zfill(4)
         print(name)
         image = vb.plot_tensor(args, image, deNormalize=True, margin=0)
         h, w, c = image.shape
         targets = targets[0][:, :4]
-        #print_box(targets, img=image, idx=batch_idx)
+        print_box(targets, img=image, idx=batch_idx)
         scale = torch.Tensor([h, w, h, w]).unsqueeze(0).repeat(targets.size(0), 1)
         targets = (targets * scale).int()
         with open(os.path.join(path, name + ".txt"), "w", encoding="utf-8") as txtfile:
@@ -227,7 +229,10 @@ def refine_dataset(args, path):
                 x1, y1, x2, y2 = [int(x) for x in target]
                 coord = [x1, y1, x2, y1, x2, y2, x1, y2, "Text"]
                 txtfile.write(",".join([str(c) for c in coord]) + "\n")
+        image = image.astype(np.uint8)
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         cv2.imwrite(os.path.join(path, name + ".jpg"), image)
+        pass
 
 if __name__ == "__main__":
     def prepare_aug(transform_det):
