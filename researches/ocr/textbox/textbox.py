@@ -38,7 +38,7 @@ def fit(args, cfg, net, dataset, optimizer, prior, is_train):
         for batch_idx, (image, targets) in enumerate(dataset):
             image = image.cuda()
             targets = [ann.cuda() for ann in targets]
-            #visualize_bbox(args, cfg, image, targets, prior)
+            visualize_bbox(args, cfg, image, targets, prior)
             out = net(image, is_train)
             if is_train:
                 loss_l, loss_c = criterion(out, targets)

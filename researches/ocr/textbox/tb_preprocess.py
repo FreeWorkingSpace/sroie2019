@@ -74,7 +74,7 @@ def detect_angle(img):
 
 def eatimate_angle(signal, args, path, seed, size, device=None):
     transform_det = {}
-    signal = clahe_inv(signal)
+    signal = clahe_inv(signal, args, path, seed, size)
     original_size = signal.shape
     # Resize to small image for detect rotation angle
     width = original_size[1] / original_size[0] * 500
