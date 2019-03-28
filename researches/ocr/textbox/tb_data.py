@@ -13,7 +13,10 @@ def get_path_and_label(args, length, paths, auxiliary_info):
     img_files, txt_files = [], []
     for txt_file in sorted(glob.glob(paths+ "/*.%s"%(auxiliary_info["txt"]))):
         img_name = txt_file[txt_file.rfind("/") + 1:-4]
-        img_files.append(os.path.join(paths, img_name + ".%s" % (auxiliary_info["img"])))
+        img_path = os.path.join(paths, img_name + ".%s" % (auxiliary_info["img"]))
+        if not os.path.exists(img_path):
+            continue
+        img_files.append(img_path)
         txt_files.append(txt_file)
     return [list(zip(img_files, txt_files))]
 
