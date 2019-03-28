@@ -1,4 +1,4 @@
-import os, time, sys, math, random
+import os, time, sys, math, random, glob
 sys.path.append(os.path.expanduser("~/Documents/sroie2019"))
 import cv2, torch
 import numpy as np
@@ -109,11 +109,99 @@ def measure(pred_boxes, gt_boxes):
     return float(accuracy), float(precision), float(recall)
 
 
+def test_rotation():
+    def return_aug(transform_det, height_ori, width_ori, height, width):
+        aug_list = []
+        if "crop" in transform_det:
+            top_crop, right_crop, bottom, left = transform_det["crop"]
+            left = (left + width/2) / width_ori
+            bottom = (bottom + height/2) / height_ori
+            aug_list.append(
+                augmenters.PadToFixedSize(width=width_ori, height=height_ori, position=(left, bottom)),
+            )
+        if "rotation" in transform_det:
+            aug_list.append(
+                augmenters.Affine(rotate=-transform_det["rotation"], cval=args.aug_bg_color, fit_output=True),
+            )
+        aug = augmenters.Sequential(aug_list, random_order=False)
+        return aug
+    import imgaug
+    from imgaug import augmenters
+    net = model.SSD(cfg)
+    net = net.cuda()
+    net = util.load_latest_model(args, net, prefix="cv_1")
+    crop_aug = None
+    img_list = glob.glob(os.path.expanduser("~/Pictures/sroie_new/*.jpg"))
+    for i, img_file in enumerate(sorted(img_list)):
+        # Get img and bbox infomation from local file
+        img, bbox, _ = data.extract_bbox(args, [img_file, img_file[:-4] + ".txt"], None, None)
+        height_ori, width_ori = img.shape[0], img.shape[1]
+        # detect rotation and crop area and save it for returning the image back
+        img, transform_det = estimate_angle_and_crop_area(img, args, None, None, None)
+        if "crop" in transform_det:
+            #top_crop, right_crop, bottom, left = transform_det["crop"]
+            crop_aug = [augmenters.Crop(px=transform_det["crop"], keep_size=False)] + crop_aug
+        if "rotation" in transform_det:
+            rot_aug = augmenters.Affine(rotate=transform_det["rotation"],
+                                         cval=args.aug_bg_color, fit_output=True)
+        else:
+            rot_aug = None
+        # Augment img and bbox, if rotation exist, we only rotate img not bbox
+        if rot_aug:
+            rot_aug = augmenters.Sequential(rot_aug, random_order=False)
+            #bbox = rot_aug.augment_bounding_boxes([bbox])[0]
+            img = rot_aug.augment_image(img)
+        if crop_aug:
+            crop_aug = augmenters.Sequential(crop_aug, random_order=False)
+            crop_aug = crop_aug.to_deterministic()
+            image = crop_aug.augment_image(img)
+            bbox = crop_aug.augment_bounding_boxes([bbox])[0]
+        height, width = image.shape[0], image.shape[1]
+        net.prior = net.prior(shape=(height, width)).cuda()
+        # Collect bboxes inside the image
+        coords = []
+        h, w = image.shape[0], image.shape[1]
+        for i, bbox in enumerate(bbox.bounding_boxes):
+            condition_1 = bbox.x1 <= 0 and bbox.x2 <= 0
+            condition_2 = bbox.y1 <= 0 and bbox.y2 <= 0
+            condition_3 = bbox.x1 >= w - 1 and bbox.x2 >= w - 1
+            condition_4 = bbox.y1 >= h - 1 and bbox.y2 >= h - 1
+            if condition_1 or condition_2 or condition_3 or condition_4:
+                # Eliminate bboxes outside the image
+                continue
+            horizontal_constrain = lambda x: max(min(w, x), 0)
+            vertival_constrain = lambda y: max(min(h, y), 0)
+            coords.append([horizontal_constrain(bbox.x1) / h, vertival_constrain(bbox.y1) / w,
+                           horizontal_constrain(bbox.x2) / h, vertival_constrain(bbox.y2) / w])
+        # Prepare Tensor and Test
+        image = torch.Tensor(util.normalize_image(args, image)).unsqueeze(0)
+        image = image.permute(0, 3, 1, 2).cuda()
+        b, c, h, w = image.shape
+        out = net(image, is_train=False)
+        # Extract the predicted bboxes
+        idx = out.data[0, 1, :, 0] >= 0.4
+        text_boxes = out.data[0, 1, idx, 1:]
+        scale = torch.Tensor([h, w, h, w]).unsqueeze(0).repeat(text_boxes.size(0), 1)
+        text_boxes = text_boxes * scale
+
+        r_aug = return_aug(transform_det, height_ori, width_ori, height, width)
+        r_aug = r_aug.to_deterministic()
+        image = r_aug.augment_image(image)
+        bbox = r_aug.augment_bounding_boxes([bbox])[0]
+
+        pred_bbox = [imgaug.imgaug.BoundingBox([float(coor) for coor in area]) for area in text_boxes]
+        BBox = imgaug.imgaug.BoundingBoxesOnImage(BBox, shape=img.shape)
+        bbox_aug = crop_aug.augment_bounding_boxes(bbox)
+
+        print_box(pred, img=img, idx=i)
+    pass
+
+
 def main():
     datasets = data.fetch_detection_data(args, sources=args.train_sources, k_fold=1,
                                          batch_size=args.batch_size, batch_size_val=1,
                                          auxiliary_info=args.train_aux, split_val=0.2,
-                                         pre_process=eatimate_angle, aug=aug_sroie())
+                                         pre_process=None, aug=aug_sroie())
     for idx, (train_set, val_set) in enumerate(datasets):
         loc_loss, conf_loss = [], []
         accuracy, precision, recall, f1_score = [], [], [], []
@@ -160,6 +248,7 @@ def main():
 
 
 if __name__ == "__main__":
+    #test_rotation()
     main()
 
 

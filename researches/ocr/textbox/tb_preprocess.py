@@ -88,6 +88,20 @@ def eatimate_angle(signal, args, path, seed, size, device=None):
     return signal, transform_det
 
 
+def rotate_image(img, angle):
+    width = img.shape[1]
+    height = img.shape[0]
+    center = (width // 2, height // 2)
+    matrix = cv2.getRotationMatrix2D(center, -angle / math.pi * 180, 1.0)
+    new_width = int(abs(width * matrix[0, 0]) + abs(height * matrix[0, 1]))
+    new_height = int(abs(height * matrix[0, 0]) + abs(width * matrix[0, 1]))
+    matrix[0, 2] += (new_width / 2) - center[0]
+    matrix[1, 2] += (new_height / 2) - center[1]
+    return cv2.warpAffine(img, matrix, (new_width, new_height),
+                          borderMode=cv2.BORDER_CONSTANT,
+                          borderValue=np.median(img.reshape(-1, 3), axis=0))
+
+
 def estimate_angle_and_crop_area(signal, args, path, seed, size, device=None):
     """
     Pre-Process function for SROIE
@@ -96,20 +110,6 @@ def estimate_angle_and_crop_area(signal, args, path, seed, size, device=None):
     def norm_zero_one(x):
         min_v = torch.min(x)
         return (x - min_v) / (torch.max(x) - min_v)
-
-    def rotate_image(img, angle):
-        width = img.shape[1]
-        height = img.shape[0]
-        center = (width // 2, height // 2)
-        matrix = cv2.getRotationMatrix2D(center, -angle / math.pi * 180, 1.0)
-        new_width = int(abs(width * matrix[0, 0]) + abs(height * matrix[0, 1]))
-        new_height = int(abs(height * matrix[0, 0]) + abs(width * matrix[0, 1]))
-        matrix[0, 2] += (new_width / 2) - center[0]
-        matrix[1, 2] += (new_height / 2) - center[1]
-        return cv2.warpAffine(img, matrix, (new_width, new_height),
-                              borderMode=cv2.BORDER_CONSTANT,
-                              borderValue=np.median(img.reshape(-1, 3), axis=0)
-                              )
     img = signal
     transform_det = {}
     threshold = 0.15
@@ -248,34 +248,6 @@ if __name__ == "__main__":
             )
         aug = augmenters.Sequential(aug_list, random_order=False)
         return aug
-
-    def sroie_data_summary():
-        width_max = 0
-        width_min = 999999
-        height_max = 0
-        height_min = 999999
-        width, height = [], []
-        for img_file in sorted(glob.glob(os.path.expanduser("~/Pictures/dataset/ocr/SROIE2019/*.jpg"))):
-            print(img_file)
-            img = cv2.imread(img_file)
-            h, w = img.shape[0], img.shape[1]
-            width.append(w)
-            height.append(h)
-            width_min = min(width_min, w)
-            width_max = max(width_max, w)
-            height_min = min(height_min, h)
-            height_max = max(height_max, h)
-
-        print("width_min: %s" % (width_min))
-        print("height_min: %s" % (height_min))
-        print("width_max: %s" % (width_max))
-        print("height_max: %s" % (height_max))
-        print("height_avg %s" % (sum(height) / len(height)))
-        print("width_avg: %s" % (sum(width) / len(width)))
-        fig, ax = plt.subplots(nrows=2, ncols=1, figsize=(6, 6))
-        ax[0].hist(np.asarray(width), bins=100)
-        ax[1].hist(np.asarray(height), bins=100)
-        plt.show()
 
     import matplotlib.pyplot as plt
     import time

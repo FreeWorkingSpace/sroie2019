@@ -29,6 +29,28 @@ cfg_300 = {
 }
 
 cfg = {
+    'num_classes': 2,
+    'feature_map_sizes': [64, 32, 32],
+    'input_img_size': 512,
+    'zoom_level': [8, 16, 32],
+    'box_height': [[16], [26], [36]],
+    'box_ratios': [[2, 4, 7, 11, 16, 20, 26], [1, 2, 5, 9, 14, 20], [1, 2, 5, 9, 12]],
+    'box_height_large': [[20], [34], [42]],
+    'box_ratios_large': [[1, 2, 4, 7, 11, 15, 20], [0.5, 1, 3, 6, 10, 15], [1, 3, 5, 9]],
+    'stride': [1, 1, 1],
+    'loc_and_conf': [512, 512, 1024],
+    'conv_output': ["conv_4", "conv_5"],
+    'big_box': True,
+    'variance': [0.1, 0.2],
+    'var_updater': 1,
+    'alpha': 1,
+    'alpha_updater': 1,
+    'overlap_thresh': 0.6,
+    'clip': True,
+    'name': 'VOC',
+}
+
+cfg_new = {
     # Configuration for 512x512 input image
     'num_classes': 2,
     # Which conv layer output to use
@@ -248,12 +270,13 @@ class SSD(nn.Module):
                 output.clamp_(max=1, min=0)
         return output
 
-    def prior(self):
+    def prior(self, shape=None):
         from itertools import product as product
         mean = []
         big_box = self.cfg['big_box']
         for k in range(len(self.cfg['conv_output'])):
-            shape = self.cfg['feature_map_sizes'][k]
+            if shape is None:
+                shape = self.cfg['feature_map_sizes'][k]
             if type(shape) is list or type(shape) is tuple:
                 assert len(shape) == 2, "feature map shape shoud be either scalar or 2d list or tuple"
                 h, w = shape[0], shape[1]

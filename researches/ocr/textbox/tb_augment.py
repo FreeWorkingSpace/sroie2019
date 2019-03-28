@@ -39,12 +39,6 @@ def sroie_refine():
     return aug_list
 
 
-def aug_old():
+def aug_sroie_test():
     aug_list = []
-    aug_list.append(augmenters.Crop(percent=0.25, sample_independently=True, keep_size=False))
-    aug_list.append(augmenters.Resize(size={"height": 1024, "width": "keep-aspect-ratio"}))
-    aug_list.append(augmenters.PadToFixedSize(width=768, height=768, pad_cval=255))
-    #aug_list.append(augmenters.Fliplr(args.h_flip_prob, name="horizontal_flip"))
-    #aug_list.append(augmenters.Flipud(args.v_flip_prob, name="vertical_flip"))
-    aug_list.append(augmenters.Resize(size={"height": 768, "width": 768}))
     return aug_list
