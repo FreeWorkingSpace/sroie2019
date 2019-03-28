@@ -146,6 +146,7 @@ def test_rotation():
                                          cval=args.aug_bg_color, fit_output=True)
         else:
             rot_aug = None
+
         # Augment img and bbox, if rotation exist, we only rotate img not bbox
         if rot_aug:
             rot_aug = augmenters.Sequential(rot_aug, random_order=False)
@@ -158,6 +159,7 @@ def test_rotation():
             bbox = crop_aug.augment_bounding_boxes([bbox])[0]
         height, width = image.shape[0], image.shape[1]
         net.prior = net.prior(shape=(height, width)).cuda()
+
         # Collect bboxes inside the image
         coords = []
         h, w = image.shape[0], image.shape[1]
@@ -173,11 +175,13 @@ def test_rotation():
             vertival_constrain = lambda y: max(min(h, y), 0)
             coords.append([horizontal_constrain(bbox.x1) / h, vertival_constrain(bbox.y1) / w,
                            horizontal_constrain(bbox.x2) / h, vertival_constrain(bbox.y2) / w])
-        # Prepare Tensor and Test
+
+        # Prepare image tensor and test
         image = torch.Tensor(util.normalize_image(args, image)).unsqueeze(0)
         image = image.permute(0, 3, 1, 2).cuda()
         b, c, h, w = image.shape
         out = net(image, is_train=False)
+
         # Extract the predicted bboxes
         idx = out.data[0, 1, :, 0] >= 0.4
         text_boxes = out.data[0, 1, idx, 1:]

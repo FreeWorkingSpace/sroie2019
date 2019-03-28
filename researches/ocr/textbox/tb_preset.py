@@ -15,7 +15,7 @@ def GeneralPattern(args):
     args.loading_threads = 6
     args.img_channel = 3
     args.epoch_num = 2000
-    args.finetune = True
+    args.finetune = False
 
     # Because augmentation operation is defined in tb_augment.py
     args.do_imgaug = False
@@ -28,7 +28,7 @@ def GeneralPattern(args):
 
 
 def Unique_Patterns(args):
-    args.train_sources = ["SROIE2019"]
+    args.train_sources = ["SROIE2019_old"]
     args.train_aux = [{"txt": "txt", "img": "jpg"}]
     args.min_bbox_threshold = 0.01
     return args
