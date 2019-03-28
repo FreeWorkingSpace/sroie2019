@@ -197,8 +197,7 @@ def test_rotation():
         BBox = imgaug.imgaug.BoundingBoxesOnImage(BBox, shape=img.shape)
         bbox_aug = crop_aug.augment_bounding_boxes(bbox)
 
-        print_box(pred, img=img, idx=i)
-    pass
+        #print_box(pred, img=img, idx=i)
 
 
 def main():
