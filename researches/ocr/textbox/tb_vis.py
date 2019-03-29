@@ -29,19 +29,19 @@ def print_box(red_boxes, shape=0, green_boxes=(), blue_boxes=(),
     fig, ax = plt.subplots(figsize=(round(w / 100), round(h / 100)))
     ax.imshow(img)
     for box in red_boxes:
-        x1, y1, x2, y2 = box[0], box[1], box[2] - box[0], box[3] - box[1]
-        rect = patches.Rectangle((x1 * h, y1 * w), x2 * h, y2 * w, linewidth=1,
+        x1, y1, x2, y2 = coord_to_rect(box, h, w)
+        rect = patches.Rectangle((x1, y1), x2, y2, linewidth=1,
                                        edgecolor='r', facecolor='none', alpha=1)
         ax.add_patch(rect)
     for box in green_boxes:
-        x1, y1, x2, y2 = box[0], box[1], box[2] - box[0], box[3] - box[1]
-        rect = patches.Rectangle((x1 * h, y1 * w), x2 * h, y2 * w, linewidth=1,
-                                       edgecolor='g', facecolor='none', alpha=0.7)
+        x1, y1, x2, y2 = coord_to_rect(box, h, w)
+        rect = patches.Rectangle((x1, y1), x2, y2, linewidth=2,
+                                       edgecolor='g', facecolor='none', alpha=0.5)
         ax.add_patch(rect)
     for box in blue_boxes:
-        x1, y1, x2, y2 = box[0], box[1], box[2] - box[0], box[3] - box[1]
-        rect = patches.Rectangle((x1 * h, y1 * w), x2 * h, y2 * w, linewidth=2,
-                                       edgecolor='b', facecolor='none', alpha=0.7)
+        x1, y1, x2, y2 = coord_to_rect(box, h, w)
+        rect = patches.Rectangle((x1, y1), x2, y2, linewidth=2,
+                                       edgecolor='b', facecolor='none', alpha=0.5)
         ax.add_patch(rect)
     if title:
         plt.title(title)
@@ -61,41 +61,38 @@ def visualize_overlaps(cfg, target, label, prior, idx):
     crop_start = 0
 
     for k in range(len(cfg['conv_output'])):
-        shape = cfg['feature_map_sizes'][k]
-        if type(shape) is list or type(shape) is tuple:
-            assert len(shape) == 2, "feature map shape shoud be either scalar or 2d list or tuple"
-            h, w = shape[0], shape[1]
-        else:
-            h, w = shape, shape
-        stride = cfg['stride'][k]
-        if type(stride) is list or type(stride) is tuple:
-            assert len(stride) == 2, "stride shape shoud be either scalar or 2d list or tuple"
-            h_stride, w_stride = stride[0], stride[1]
-        else:
-            h_stride, w_stride = stride, stride
+        # Convert these inputs into two if they are lists or tuples
+        h, w = get_parameter(cfg['feature_map_sizes'][k])
+        h_stride, w_stride = get_parameter(cfg['stride'][k])
         anchor_num = calculate_anchor_number(cfg, k)
-        feature_num = len(range(0, h, h_stride)) * len(range(0, w, w_stride)) * anchor_num
-        #overlap = overlaps[:, crop_start: crop_start + feature_num]
-        _conf = conf[crop_start: crop_start + feature_num]
-        effective_sample = int(torch.sum(_conf))
+
+        # Calculate number prior boxes under current conv output
+        prior_num = len(range(0, int(h), int(h_stride))) * len(range(0, int(w), int(w_stride))) * anchor_num
+
+        # Get the index of matched prior boxes and collect these boxes
+        _conf = conf[crop_start: crop_start + prior_num]
+        matched_priors = int(torch.sum(_conf))
         idx = _conf == 1
         idx = list(np.where(idx.cpu().numpy() == 1)[0])
         for i in idx:
             coords.append(point_form(prior[crop_start+i:crop_start+i+1, :]).clamp_(max=1, min=0).squeeze())
-        #overlap = torch.max(overlap, 0)[0]
-        _conf = _conf.view(len(range(0, h, h_stride)), len(range(0, w, w_stride)), anchor_num)
+
+        # Reshape _conf into the shape of image so as to visualize it
+        _conf = _conf.view(len(range(0, int(h), int(h_stride))), len(range(0, int(w), int(w_stride))), anchor_num)
         _conf = _conf.permute(2, 0, 1)
         subs = ["ratio: %s"%(r) for r in cfg['box_ratios'][k]]
         subtitle.append("box height: %s\neffective samle: %s"
-                        %(cfg['box_height'][k], effective_sample))
+                        %(cfg['box_height'][k], matched_priors))
         if cfg['big_box']:
             subs += ["ratio: %s"%(r) for r in cfg['box_ratios_large'][k]]
             subtitle[-1] = "box height: %s and %s\neffective samle: %s" \
-                           %(cfg['box_height'][k], cfg['box_height_large'][k], effective_sample)
+                           %(cfg['box_height'][k], cfg['box_height_large'][k], matched_priors)
+
+        # Convert _conf into open-cv form
         image = vb.plot_tensor(None, _conf.unsqueeze_(1) * 254, deNormalize=False,
                                sub_title=subs)
         images.append(image.astype(np.uint8))
-        crop_start += feature_num
+        crop_start += prior_num
     return images, summary, subtitle, coords
 
 
@@ -112,14 +109,15 @@ def visualize_bbox(args, cfg, images, targets, prior=None, idx=0):
         # Create a Rectangle patch
         rects = []
         for point in bbox:
-            x1, y1, x2, y2 = point[0], point[1], point[2] - point[0], point[3] - point[1]
-            rects.append(patches.Rectangle((x1 * h, y1 * w), x2 * h, y2 * w, linewidth=1,
+            x1, y1, x2, y2 = coord_to_rect(point, h, w)
+            rects.append(patches.Rectangle((x1, y1), x2, y2, linewidth=1,
                                            edgecolor='r', facecolor='none'))
         if prior is not None:
-            overlaps, summary, subtitle, coords = visualize_overlaps(cfg, bbox[:, :-1].data, bbox[:, -1].data, prior, i)
+            overlaps, summary, subtitle, coords = \
+                visualize_overlaps(cfg, bbox[:, :-1].data, bbox[:, -1].data, prior, i)
             for coord in coords:
-                x1, y1, x2, y2 = coord[0], coord[1], coord[2] - coord[0], coord[3] - coord[1]
-                rects.append(patches.Rectangle((x1 * h, y1 * w), x2 * h, y2 * w, linewidth=1,
+                x1, y1, x2, y2 = coord_to_rect(coord, h, w)
+                rects.append(patches.Rectangle((x1, y1), x2, y2, linewidth=1,
                                                edgecolor='b', facecolor='none'))
         else:
             overlaps = []
@@ -140,3 +138,4 @@ def visualize_bbox(args, cfg, images, targets, prior=None, idx=0):
         plt.tight_layout()
         plt.savefig(os.path.expanduser("~/Pictures/batch_%s_sample_%s.jpg"%(idx, i)))
         plt.close()
+

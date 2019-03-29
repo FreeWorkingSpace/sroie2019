@@ -144,7 +144,7 @@ class SSD(nn.Module):
         self.detect = Detect(self.num_classes, 0, 200, 0.01, 0.45)
         self.connect_loc_to_conf = connect_loc_to_conf
         if fix_size:
-            self.prior = self.prior().cuda()
+            self.prior = self.create_prior().cuda()
 
         # Prepare VGG-16 net with batch normalization
         vgg16_model = vgg16_bn(pretrained=True)
@@ -248,7 +248,7 @@ class SSD(nn.Module):
                 output.clamp_(max=1, min=0)
         return output
 
-    def prior(self, feature_map_size=None):
+    def create_prior(self, feature_map_size=None):
         from itertools import product as product
         mean = []
         big_box = self.cfg['big_box']
@@ -256,18 +256,10 @@ class SSD(nn.Module):
             assert len(self.cfg['feature_map_sizes']) >= len(self.cfg['conv_output'])
             feature_map_size = self.cfg['feature_map_sizes']
         for k in range(len(self.cfg['conv_output'])):
-            shape = feature_map_size[k]
-            if type(shape) is list or type(shape) is tuple:
-                assert len(shape) == 2, "feature map shape shoud be either scalar or 2d list or tuple"
-                h, w = shape[0], shape[1]
-            else:
-                h, w = shape, shape
-            if type(self.cfg['stride'][k]) is list or type(self.cfg['stride'][k]) is tuple:
-                assert len(self.cfg['stride']) == 2, "feature map shape shoud be either scalar or 2d list or tuple"
-                h_stride, w_stride = self.cfg['stride'][k][0], self.cfg['stride'][k][1]
-            else:
-                h_stride, w_stride = self.cfg['stride'][k], self.cfg['stride'][k]
-            for i, j in product(range(0, h, h_stride), range(0, w, w_stride)):
+            # Convert these inputs into two if they are lists or tuples
+            h, w = get_parameter(feature_map_size[k])
+            h_stride, w_stride = get_parameter(cfg['stride'][k])
+            for i, j in product(range(0, int(h), int(h_stride)), range(0, int(w), int(w_stride))):
                 cx = (j + 0.5) / w
                 cy = (i + 0.5) / h
                 # Add prior boxes with different height and aspect-ratio

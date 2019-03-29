@@ -160,7 +160,7 @@ def match(cfg, threshold, truths, priors, variances, labels, loc_t, conf_t, idx,
     best_prior_overlap.squeeze_(1)
     # 剔除一些匹配度低的prior_idx
     _best_prior_idx = best_prior_idx[best_prior_overlap > 0.5]
-    # 将相应的best_truth_overlap中的overlap变为2
+    # 将剔除后的_best_prior_idx中所对应的overlap变为2
     best_truth_overlap.index_fill_(0, _best_prior_idx, 2)
     for j in range(best_prior_idx.size(0)):
         best_truth_idx[best_prior_idx[j]] = j
@@ -299,6 +299,28 @@ def nms(boxes, scores, overlap=0.5, top_k=200):
         # keep only elements with an IoU <= overlap
         idx = idx[IoU.le(overlap)]
     return keep, count
+
+
+def coord_to_rect(coord, height, width):
+    """
+    Convert 4 point boundbox coordinate to matplotlib rectangle coordinate
+    """
+    x1, y1, x2, y2 = coord[0], coord[1], coord[2] - coord[0], coord[3] - coord[1]
+    return x1 * width, y1 * height, x2 * width, y2 * height
+
+
+def get_parameter(param):
+    """
+    Convert input parameter to two parameter if they are lists or tuples
+    Mainly used in tb_vis.py and tb_model.py
+    """
+    if type(param) is list or type(param) is tuple:
+        assert len(param) == 2, "input parameter shoud be either scalar or 2d list or tuple"
+        p1, p2 = param[0], param[1]
+    else:
+        p1, p2 = param, param
+    return p1, p2
+
 
 if __name__ == "__main__":
     a = torch.Tensor([[]])
