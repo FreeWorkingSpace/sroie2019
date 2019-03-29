@@ -36,8 +36,8 @@ cfg = {
     # As long as its length does not exceed the length of other value
     # e.g. feature_map_sizes, box_height, box_height_large
     # Then it will be OK
-    'conv_output': ["conv_4", "conv_5"],
-    'feature_map_sizes': [64, 32, 32],
+    'conv_output': ["conv_4", "conv_5", "extra_2"],
+    'feature_map_sizes': [64, 32, 16],
     'input_img_size': 512,
     # See the visualization result by enabling visualize_bbox in function fit of textbox.py
     # And change the settings according to the result
@@ -45,17 +45,17 @@ cfg = {
     # 'box_height': [[16], [26], [36]],
     # 'box_height': [[10, 16], [26], [36]],
     # 'box_height': [[16], [26], []],
-    'box_height': [[16], [26], [36]],
+    'box_height': [[14], [24], [38]],
     'box_ratios': [[2, 4, 7, 11, 16, 20, 26], [1, 2, 5, 9, 14, 20], [1, 2, 5, 9, 12]],
     # If big_box is True, then box_height_large and box_ratios_large will be used
     'big_box': True,
-    'box_height_large': [[20], [34], [42]],
-    'box_ratios_large': [[1, 2, 4, 7, 11, 15, 20], [0.5, 1, 3, 6, 10, 15], [1, 3, 5, 9]],
+    'box_height_large': [[18], [30], [46]],
+    'box_ratios_large': [[1, 2, 4, 7, 11, 15, 20], [0.5, 1, 3, 6, 10, 15], [1, 2, 4, 7, 11]],
     # You can increase the stride when feature_map_size is large
     # especially at swallow conv layers, so as not to create lots of prior boxes
     'stride': [1, 1, 1],
     # Input depth for location and confidence layers
-    'loc_and_conf': [512, 512, 1024],
+    'loc_and_conf': [512, 512, 512],
     # The hyperparameter to decide the Loss
     'variance': [0.1, 0.2],
     'var_updater': 1,
@@ -166,7 +166,6 @@ class SSD(nn.Module):
         self.conv_module.append(nn.Sequential(*net[33:43]))
 
         # Extra Layers
-        """
         self.conv_module_name.append("extra_1")
         self.conv_module.append(omth_blocks.conv_block(in_channel, [1024, 1024],
                                                        kernel_sizes=[3, 1], stride=[1, 1], padding=[3, 0],
@@ -174,7 +173,6 @@ class SSD(nn.Module):
         self.conv_module_name.append("extra_2")
         self.conv_module.append(omth_blocks.conv_block(1024, [256, 512], kernel_sizes=[1, 3],
                                                        stride=[1, 2], padding=[0, 1], batch_norm=batch_norm))
-        """
 
         # Location and Confidence Layer
         for i, in_channel in enumerate(cfg['loc_and_conf']):
@@ -250,12 +248,15 @@ class SSD(nn.Module):
                 output.clamp_(max=1, min=0)
         return output
 
-    def prior(self):
+    def prior(self, feature_map_size=None):
         from itertools import product as product
         mean = []
         big_box = self.cfg['big_box']
+        if feature_map_size is None:
+            assert len(self.cfg['feature_map_sizes']) >= len(self.cfg['conv_output'])
+            feature_map_size = self.cfg['feature_map_sizes']
         for k in range(len(self.cfg['conv_output'])):
-            shape = self.cfg['feature_map_sizes'][k]
+            shape = feature_map_size[k]
             if type(shape) is list or type(shape) is tuple:
                 assert len(shape) == 2, "feature map shape shoud be either scalar or 2d list or tuple"
                 h, w = shape[0], shape[1]

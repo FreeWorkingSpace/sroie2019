@@ -41,7 +41,7 @@ def fit(args, cfg, net, dataset, optimizer, prior, is_train):
         for batch_idx, (image, targets) in enumerate(dataset):
             image = image.cuda()
             targets = [ann.cuda() for ann in targets]
-            # visualize_bbox(args, cfg, image, targets, prior)
+            #visualize_bbox(args, cfg, image, targets, prior)
             out = net(image, is_train)
             if is_train:
                 loss_l, loss_c = criterion(out, targets)
@@ -130,17 +130,21 @@ def test_rotation():
     net = model.SSD(cfg)
     net = net.cuda()
     net = util.load_latest_model(args, net, prefix="cv_1")
-    crop_aug = None
+    basic_aug = None
     img_list = glob.glob(os.path.expanduser("~/Pictures/sroie_new/*.jpg"))
     for i, img_file in enumerate(sorted(img_list)):
         # Get img and bbox infomation from local file
         img, bbox, _ = data.extract_bbox(args, [img_file, img_file[:-4] + ".txt"], None, None)
         height_ori, width_ori = img.shape[0], img.shape[1]
+        gcd = 64
+        height_resize = int(height_ori / gcd) * gcd
+        width_resize = int(width_ori / gcd) * gcd
+        basic_aug = [augmenters.Resize(size={"height": height_resize, "width": width_resize})]
         # detect rotation and crop area and save it for returning the image back
         img, transform_det = estimate_angle_and_crop_area(img, args, None, None, None)
         if "crop" in transform_det:
             #top_crop, right_crop, bottom, left = transform_det["crop"]
-            crop_aug = [augmenters.Crop(px=transform_det["crop"], keep_size=False)] + crop_aug
+            basic_aug = [augmenters.Crop(px=transform_det["crop"], keep_size=False)] + basic_aug
         if "rotation" in transform_det:
             rot_aug = augmenters.Affine(rotate=transform_det["rotation"],
                                          cval=args.aug_bg_color, fit_output=True)
@@ -152,11 +156,11 @@ def test_rotation():
             rot_aug = augmenters.Sequential(rot_aug, random_order=False)
             #bbox = rot_aug.augment_bounding_boxes([bbox])[0]
             img = rot_aug.augment_image(img)
-        if crop_aug:
-            crop_aug = augmenters.Sequential(crop_aug, random_order=False)
-            crop_aug = crop_aug.to_deterministic()
-            image = crop_aug.augment_image(img)
-            bbox = crop_aug.augment_bounding_boxes([bbox])[0]
+        if basic_aug:
+            basic_aug = augmenters.Sequential(basic_aug, random_order=False)
+            basic_aug = basic_aug.to_deterministic()
+            image = basic_aug.augment_image(img)
+            bbox = basic_aug.augment_bounding_boxes([bbox])[0]
         height, width = image.shape[0], image.shape[1]
         net.prior = net.prior(shape=(height, width)).cuda()
 
@@ -195,7 +199,7 @@ def test_rotation():
 
         pred_bbox = [imgaug.imgaug.BoundingBox([float(coor) for coor in area]) for area in text_boxes]
         BBox = imgaug.imgaug.BoundingBoxesOnImage(BBox, shape=img.shape)
-        bbox_aug = crop_aug.augment_bounding_boxes(bbox)
+        bbox_aug = basic_aug.augment_bounding_boxes(bbox)
 
         #print_box(pred, img=img, idx=i)
 
