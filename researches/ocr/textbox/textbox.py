@@ -192,7 +192,7 @@ def test_rotation():
         width_resize = round(width / gcd) * gcd
         resize_aug =augmenters.Sequential([
             augmenters.Resize(size={"height": 1472, "width": 512}),
-            augmenters.CropToFixedSize(height=640, width=512),
+            augmenters.CropToFixedSize(height=1024, width=512),
         ])
         resize_aug = resize_aug.to_deterministic()
         image = resize_aug.augment_image(image)
