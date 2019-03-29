@@ -203,7 +203,7 @@ def clahe_inv(img, args, path, seed, size):
     lab = cv2.merge(lab_planes)
     img = cv2.cvtColor(lab, cv2.COLOR_LAB2BGR)
     #img = cv2.bilateralFilter(img, 5, 1, 1)
-    return img
+    return img, None
 
 
 def refine_dataset(args, path):

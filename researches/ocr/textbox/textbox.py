@@ -41,7 +41,7 @@ def fit(args, cfg, net, dataset, optimizer, prior, is_train):
         for batch_idx, (image, targets) in enumerate(dataset):
             image = image.cuda()
             targets = [ann.cuda() for ann in targets]
-            visualize_bbox(args, cfg, image, targets, prior)
+            #visualize_bbox(args, cfg, image, targets, prior)
             out = net(image, is_train)
             if is_train:
                 loss_l, loss_c = criterion(out, targets)
@@ -80,7 +80,7 @@ def val(args, cfg, net, dataset, optimizer, prior):
 
 
 def evaluate(img, detections, targets, batch_idx, visualize=False):
-    idx = detections[0, 1, :, 0] >= 0.4
+    idx = detections[0, 1, :, 0] >= 0.3
     text_boxes = detections[0, 1, idx, 1:]
     gt_boxes = targets[0][:, :-1].data
     accuracy, precision, recall = measure(text_boxes, gt_boxes)
@@ -238,13 +238,13 @@ def main():
     datasets = data.fetch_detection_data(args, sources=args.train_sources, k_fold=1,
                                          batch_size=args.batch_size, batch_size_val=1,
                                          auxiliary_info=args.train_aux, split_val=0.2,
-                                         pre_process=None, aug=aug_sroie())
+                                         pre_process=clahe_inv, aug=aug_sroie())
     for idx, (train_set, val_set) in enumerate(datasets):
         loc_loss, conf_loss = [], []
         accuracy, precision, recall, f1_score = [], [], [], []
         print("\n =============== Cross Validation: %s/%s ================ " %
               (idx + 1, len(datasets)))
-        net = model.SSD(cfg)
+        net = model.SSD(cfg, connect_loc_to_conf=True)
         prior = net.prior
         net = torch.nn.DataParallel(net, device_ids=[0, 1, 2])
         # Input dimension of bbox is different in each step
@@ -285,7 +285,7 @@ def main():
 
 
 if __name__ == "__main__":
-    test_rotation()
+    #test_rotation()
     main()
 
 
