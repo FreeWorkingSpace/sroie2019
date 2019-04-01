@@ -38,7 +38,8 @@ cfg = {
     # Then it will be OK
     'conv_output': ["conv_4", "conv_5", "extra_2"],
     'feature_map_sizes': [64, 32, 16],
-    'input_img_size': 512,
+    # For static input size only, when Dynamic mode is turned out, it will not be used
+    'input_img_size': [1024, 512],
     # See the visualization result by enabling visualize_bbox in function fit of textbox.py
     # And change the settings according to the result
     # Some possible settings of box_height and box_height_large
@@ -62,7 +63,7 @@ cfg = {
     'alpha': 1,
     'alpha_updater': 1,
     # Jaccard Distance Threshold
-    'overlap_thresh': 0.6,
+    'overlap_thresh': 0.8,
     # Whether to constrain the prior boxes inside the image
     'clip': True,
 }
@@ -134,7 +135,6 @@ class SSD(nn.Module):
         self.cfg = cfg
         self.num_classes = cfg['num_classes']
         self.output_list = cfg['conv_output']
-        self.img_size = cfg['input_img_size']
         self.conv_module = nn.ModuleList([])
         self.loc_layers = nn.ModuleList([])
         self.conf_layers = nn.ModuleList([])
@@ -225,9 +225,9 @@ class SSD(nn.Module):
         for k, f in enumerate(self.cfg['feature_map_sizes']):
             n = (len(self.cfg['box_ratios'][k])) * (1, 2)[self.cfg['bidirection']] + \
                 1 + (0, 1)[self.cfg['big_box']]
-            f_k = self.img_size / self.cfg['zoom_level'][k]
-            s_k = self.cfg['box_height'][k] / self.img_size
-            s_k_big = math.sqrt(s_k * (self.cfg['box_height_large'][k] / self.img_size))
+            f_k = self.cfg['input_img_size'] / self.cfg['zoom_level'][k]
+            s_k = self.cfg['box_height'][k] / self.cfg['input_img_size']
+            s_k_big = math.sqrt(s_k * (self.cfg['box_height_large'][k] / self.cfg['input_img_size']))
             if type(f) is list or type(f) is tuple:
                 h, w = f[0], f[1]
             else:
@@ -248,28 +248,44 @@ class SSD(nn.Module):
                 output.clamp_(max=1, min=0)
         return output
 
-    def create_prior(self, feature_map_size=None):
+    def create_prior(self, feature_map_size=None, input_size=None):
+        """
+
+        :param feature_map_size:
+        :param input_size: When input size is not None. which means Dynamic Input Size
+        :return:
+        """
         from itertools import product as product
         mean = []
         big_box = self.cfg['big_box']
         if feature_map_size is None:
             assert len(self.cfg['feature_map_sizes']) >= len(self.cfg['conv_output'])
             feature_map_size = self.cfg['feature_map_sizes']
+        if input_size is None:
+            input_size = cfg['input_img_size']
+        if type(input_size) in [int]:
+            input_size = [input_size]
+        elif type(input_size) in [list, tuple]:
+            assert len(input_size) <= 2, "input_size should be either int or list of int with 2 elements"
+        else:
+            raise TypeError("input_size should be either int or list of int with 2 elements")
         for k in range(len(self.cfg['conv_output'])):
-            # Convert these inputs into two if they are lists or tuples
+            # Get setting for prior creation from cfg
             h, w = get_parameter(feature_map_size[k])
             h_stride, w_stride = get_parameter(cfg['stride'][k])
             for i, j in product(range(0, int(h), int(h_stride)), range(0, int(w), int(w_stride))):
+                # 4 point represent: center_x, center_y, box_width, box_height
                 cx = (j + 0.5) / w
                 cy = (i + 0.5) / h
                 # Add prior boxes with different height and aspect-ratio
                 for height in self.cfg['box_height'][k]:
-                    s_k = height / self.img_size
+                    s_k = height / input_size[0]
                     for ar in self.cfg['box_ratios'][k]:
                         mean += [cx, cy, s_k * ar, s_k]
+                # Add prior boxes with different number aspect-ratio if the box is large
                 if big_box:
                     for height in self.cfg['box_height_large'][k]:
-                        s_k_big = height / self.img_size
+                        s_k_big = height / input_size[0]
                         for ar in self.cfg['box_ratios_large'][k]:
                             mean += [cx, cy, s_k_big * ar, s_k_big]
         # back to torch land

@@ -61,12 +61,10 @@ def visualize_overlaps(cfg, target, label, prior, idx):
     crop_start = 0
 
     for k in range(len(cfg['conv_output'])):
-        # Convert these inputs into two if they are lists or tuples
+        # Get the setting from cfg to calculate number of anchor and prior boxes
         h, w = get_parameter(cfg['feature_map_sizes'][k])
         h_stride, w_stride = get_parameter(cfg['stride'][k])
         anchor_num = calculate_anchor_number(cfg, k)
-
-        # Calculate number prior boxes under current conv output
         prior_num = len(range(0, int(h), int(h_stride))) * len(range(0, int(w), int(w_stride))) * anchor_num
 
         # Get the index of matched prior boxes and collect these boxes

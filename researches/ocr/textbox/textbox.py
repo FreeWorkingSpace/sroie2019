@@ -146,7 +146,7 @@ def test_rotation():
         return coords
     import imgaug
     from imgaug import augmenters
-    net = model.SSD(cfg)
+    net = model.SSD(cfg, connect_loc_to_conf=True)
     net = net.cuda()
     net_dict = net.state_dict()
     weight_dict = util.load_latest_model(args, net, prefix="cv_1", return_state_dict=True)
@@ -192,7 +192,7 @@ def test_rotation():
         width_resize = round(width / gcd) * gcd
         resize_aug =augmenters.Sequential([
             augmenters.Resize(size={"height": 1472, "width": 512}),
-            augmenters.CropToFixedSize(height=1024, width=512),
+            augmenters.CropToFixedSize(height=128, width=512),
         ])
         resize_aug = resize_aug.to_deterministic()
         image = resize_aug.augment_image(image)
@@ -204,7 +204,7 @@ def test_rotation():
         # Generate prior boxes according to the input image size
         cfg["feature_map_sizes"] = [[height_final/8, width_final/8], [height_final/16, width_final/16],
                                      [height_final/32, width_final/32]]
-        net.prior = net.create_prior().cuda()
+        net.prior = net.create_prior(input_size=(height_final, width_final)).cuda()
         # Collect bboxes inside the image
         coord = extract_boxes(bbox, height_final, width_final, box_label)
         rot_coord = extract_boxes(rot_bbox, height_final, width_final, box_label)
@@ -285,7 +285,7 @@ def main():
 
 
 if __name__ == "__main__":
-    #test_rotation()
+    test_rotation()
     main()
 
 
