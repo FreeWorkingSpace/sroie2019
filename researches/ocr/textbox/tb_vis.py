@@ -7,7 +7,8 @@ from matplotlib import gridspec
 from researches.ocr.textbox.tb_utils import *
 
 def print_box(red_boxes, shape=0, green_boxes=(), blue_boxes=(),
-              img=None, idx=None, title=None):
+              img=None, idx=None, title=None, step_by_step_r=False,
+              step_by_step_g=False, step_by_step_b=False):
     """
     Print three kind of boxes in different color on a canvas of shape: shape
     :param red_boxes:
@@ -28,21 +29,31 @@ def print_box(red_boxes, shape=0, green_boxes=(), blue_boxes=(),
         h, w, c = img.shape
     fig, ax = plt.subplots(figsize=(round(w / 100), round(h / 100)))
     ax.imshow(img)
+    step = 0
     for box in red_boxes:
         x1, y1, x2, y2 = coord_to_rect(box, h, w)
         rect = patches.Rectangle((x1, y1), x2, y2, linewidth=1,
                                        edgecolor='r', facecolor='none', alpha=1)
         ax.add_patch(rect)
+        if step_by_step_r:
+            step += 1
+            plt.savefig(os.path.expanduser("~/Pictures/step_%s.jpg"%(str(step).zfill(4))))
     for box in green_boxes:
         x1, y1, x2, y2 = coord_to_rect(box, h, w)
         rect = patches.Rectangle((x1, y1), x2, y2, linewidth=2,
                                        edgecolor='g', facecolor='none', alpha=0.5)
         ax.add_patch(rect)
+        if step_by_step_g:
+            step += 1
+            plt.savefig(os.path.expanduser("~/Pictures/step_%s.jpg" % (str(step).zfill(4))))
     for box in blue_boxes:
         x1, y1, x2, y2 = coord_to_rect(box, h, w)
         rect = patches.Rectangle((x1, y1), x2, y2, linewidth=2,
                                        edgecolor='b', facecolor='none', alpha=0.5)
         ax.add_patch(rect)
+        if step_by_step_b:
+            step += 1
+            plt.savefig(os.path.expanduser("~/Pictures/step_%s.jpg" % (str(step).zfill(4))))
     if title:
         plt.title(title)
     if idx is not None:

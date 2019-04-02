@@ -12,6 +12,7 @@ def calculate_anchor_number(cfg, i):
 def point_form(boxes):
     """ Convert prior_boxes to (xmin, ymin, xmax, ymax)
     """
+    # boxes[:, :2] represent the center_x and center_y
     return torch.cat((boxes[:, :2] - boxes[:, 2:]/2, boxes[:, :2] + boxes[:, 2:]/2), 1)
 
 

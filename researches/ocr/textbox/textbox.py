@@ -146,7 +146,7 @@ def test_rotation():
         return coords
     import imgaug
     from imgaug import augmenters
-    net = model.SSD(cfg, connect_loc_to_conf=True)
+    net = model.SSD(cfg, connect_loc_to_conf=True, fix_size=False)
     net = net.cuda()
     net_dict = net.state_dict()
     weight_dict = util.load_latest_model(args, net, prefix="cv_1", return_state_dict=True)
@@ -192,7 +192,7 @@ def test_rotation():
         width_resize = round(width / gcd) * gcd
         resize_aug =augmenters.Sequential([
             augmenters.Resize(size={"height": 1472, "width": 512}),
-            augmenters.CropToFixedSize(height=128, width=512),
+            augmenters.CropToFixedSize(height=768, width=512),
         ])
         resize_aug = resize_aug.to_deterministic()
         image = resize_aug.augment_image(image)

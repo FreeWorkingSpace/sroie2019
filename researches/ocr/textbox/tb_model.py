@@ -7,27 +7,6 @@ import omni_torch.networks.blocks as omth_blocks
 import researches.ocr.textbox as init
 from researches.ocr.textbox.tb_utils import *
 
-cfg_300 = {
-    # Configuration for 300x300 input image
-    'num_classes': 2,
-    'feature_map_sizes': [38, 19, 10],
-    'input_img_size': 300,
-    'box_height': [15, 25],
-    'box_ratios': [[1, 2, 4, 7, 11, 16, 20], [1, 2, 5, 9, 14]],
-    'box_height_large': [20, 32],
-    'box_ratios_large': [[1, 2, 4, 7, 11, 15], [1, 3, 5, 8]],
-    'stride': [1, 1],
-    'loc_and_conf': [512, 512],
-    'conv_output': ["conv_4", "conv_5"],
-    'big_box': True,
-    'variance': [0.1, 0.2],
-    'var_updater': 1,
-    'alpha': 1,
-    'alpha_updater': 1,
-    'overlap_thresh': 0.65,
-    'clip': True,
-}
-
 cfg = {
     # Configuration for 512x512 input image
     'num_classes': 2,
@@ -39,6 +18,7 @@ cfg = {
     'conv_output': ["conv_4", "conv_5", "extra_2"],
     'feature_map_sizes': [64, 32, 16],
     # For static input size only, when Dynamic mode is turned out, it will not be used
+    # Must be 2d list or tuple
     'input_img_size': [1024, 512],
     # See the visualization result by enabling visualize_bbox in function fit of textbox.py
     # And change the settings according to the result
@@ -63,7 +43,7 @@ cfg = {
     'alpha': 1,
     'alpha_updater': 1,
     # Jaccard Distance Threshold
-    'overlap_thresh': 0.8,
+    'overlap_thresh': 0.7,
     # Whether to constrain the prior boxes inside the image
     'clip': True,
 }
@@ -143,6 +123,7 @@ class SSD(nn.Module):
         self.softmax = nn.Softmax(dim=-1)
         self.detect = Detect(self.num_classes, 0, 200, 0.01, 0.45)
         self.connect_loc_to_conf = connect_loc_to_conf
+        self.input_shape_static = fix_size
         if fix_size:
             self.prior = self.create_prior().cuda()
 
@@ -261,14 +242,10 @@ class SSD(nn.Module):
         if feature_map_size is None:
             assert len(self.cfg['feature_map_sizes']) >= len(self.cfg['conv_output'])
             feature_map_size = self.cfg['feature_map_sizes']
-        if input_size is None:
+        if self.input_shape_static:
             input_size = cfg['input_img_size']
-        if type(input_size) in [int]:
-            input_size = [input_size]
-        elif type(input_size) in [list, tuple]:
-            assert len(input_size) <= 2, "input_size should be either int or list of int with 2 elements"
-        else:
-            raise TypeError("input_size should be either int or list of int with 2 elements")
+        assert len(input_size) == 2, "input_size should be either int or list of int with 2 elements"
+        input_ratio = input_size[1] / input_size[0]
         for k in range(len(self.cfg['conv_output'])):
             # Get setting for prior creation from cfg
             h, w = get_parameter(feature_map_size[k])
@@ -280,14 +257,14 @@ class SSD(nn.Module):
                 # Add prior boxes with different height and aspect-ratio
                 for height in self.cfg['box_height'][k]:
                     s_k = height / input_size[0]
-                    for ar in self.cfg['box_ratios'][k]:
-                        mean += [cx, cy, s_k * ar, s_k]
+                    for box_ratio in self.cfg['box_ratios'][k]:
+                        mean += [cx, cy, s_k * box_ratio / input_ratio, s_k]
                 # Add prior boxes with different number aspect-ratio if the box is large
                 if big_box:
                     for height in self.cfg['box_height_large'][k]:
                         s_k_big = height / input_size[0]
-                        for ar in self.cfg['box_ratios_large'][k]:
-                            mean += [cx, cy, s_k_big * ar, s_k_big]
+                        for box_ratio_l in self.cfg['box_ratios_large'][k]:
+                            mean += [cx, cy, s_k_big * box_ratio_l / input_ratio, s_k_big]
         # back to torch land
         output = torch.Tensor(mean).view(-1, 4)
         if self.cfg['clip']:
