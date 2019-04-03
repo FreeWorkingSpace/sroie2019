@@ -23,7 +23,7 @@ args = util.get_args(preset.PRESET)
 if not torch.cuda.is_available():
     raise RuntimeError("Need cuda devices")
 
-def fit(args, cfg, net, dataset, optimizer, prior, is_train):
+def fit(args, cfg, net, dataset, optimizer, is_train):
     def avg(list):
         return sum(list) / len(list)
     if is_train:
@@ -41,8 +41,8 @@ def fit(args, cfg, net, dataset, optimizer, prior, is_train):
         for batch_idx, (image, targets) in enumerate(dataset):
             image = image.cuda()
             targets = [ann.cuda() for ann in targets]
-            #visualize_bbox(args, cfg, image, targets, prior)
             out = net(image, is_train)
+            # visualize_bbox(args, cfg, image, targets, net.prior)
             if is_train:
                 loss_l, loss_c = criterion(out, targets)
                 loss = loss_l + loss_c
@@ -238,14 +238,13 @@ def main():
     datasets = data.fetch_detection_data(args, sources=args.train_sources, k_fold=1,
                                          batch_size=args.batch_size, batch_size_val=1,
                                          auxiliary_info=args.train_aux, split_val=0.2,
-                                         pre_process=clahe_inv, aug=aug_sroie())
+                                         pre_process=clahe_inv, aug=aug_sroie_dynamic())
     for idx, (train_set, val_set) in enumerate(datasets):
         loc_loss, conf_loss = [], []
         accuracy, precision, recall, f1_score = [], [], [], []
         print("\n =============== Cross Validation: %s/%s ================ " %
               (idx + 1, len(datasets)))
         net = model.SSD(cfg, connect_loc_to_conf=True, fix_size=False)
-        prior = net.prior
         net = torch.nn.DataParallel(net, device_ids=[0, 1, 2])
         # Input dimension of bbox is different in each step
         cudnn.benchmark = False
@@ -256,12 +255,12 @@ def main():
         optimizer = AdaBound(net.parameters(), lr=args.learning_rate, weight_decay=args.weight_decay,)
 
         for epoch in range(args.epoch_num):
-            loc_avg, conf_abg = fit(args, cfg, net, train_set, optimizer, prior, is_train=True)
+            loc_avg, conf_abg = fit(args, cfg, net, train_set, optimizer, is_train=True)
             loc_loss.append(loc_avg)
             conf_loss.append(conf_abg)
             train_losses = [np.asarray(loc_loss), np.asarray(conf_loss)]
             if val_set is not None:
-                accu, pre, rec, f1 = fit(args, cfg, net, val_set, optimizer, prior, is_train=False)
+                accu, pre, rec, f1 = fit(args, cfg, net, val_set, optimizer, is_train=False)
                 accuracy.append(accu)
                 precision.append(pre)
                 recall.append(rec)
@@ -285,7 +284,7 @@ def main():
 
 
 if __name__ == "__main__":
-    test_rotation()
+    #test_rotation()
     main()
 
 
