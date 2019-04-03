@@ -123,7 +123,7 @@ class SSD(nn.Module):
         self.softmax = nn.Softmax(dim=-1)
         self.detect = Detect(self.num_classes, 0, 200, 0.01, 0.45)
         self.connect_loc_to_conf = connect_loc_to_conf
-        self.input_shape_static = fix_size
+        self.fix_size = fix_size
         if fix_size:
             self.prior = self.create_prior().cuda()
 
@@ -242,7 +242,7 @@ class SSD(nn.Module):
         if feature_map_size is None:
             assert len(self.cfg['feature_map_sizes']) >= len(self.cfg['conv_output'])
             feature_map_size = self.cfg['feature_map_sizes']
-        if self.input_shape_static:
+        if self.fix_size:
             input_size = cfg['input_img_size']
         assert len(input_size) == 2, "input_size should be either int or list of int with 2 elements"
         input_ratio = input_size[1] / input_size[0]
@@ -272,16 +272,22 @@ class SSD(nn.Module):
         return output
 
     def forward(self, x, is_train=True, verbose=False):
+        input_size = [x.size(2), x.size(3)]
         locations, confidences, conv_output = [], [], []
+        feature_shape = []
         for i, conv_layer in enumerate(self.conv_module):
             x = conv_layer(x)
+            # Get shape from each conv output so as to create prior
             if self.conv_module_name[i] in self.output_list:
                 conv_output.append(x)
+                feature_shape.append((x.size(2), x.size(3)))
                 if verbose:
                     print("CNN output shape: %s" % (str(x.shape)))
                 if len(conv_output) == len(self.output_list):
                     # Doesn't need to compute further convolutional output
                     break
+        if not self.fix_size:
+            self.prior = self.create_prior(feature_map_size=feature_shape, input_size=input_size).cuda()
         for i, x in enumerate(conv_output):
             loc = self.loc_layers[i](x)
             locations.append(loc.permute(0, 2, 3, 1).contiguous().view(loc.size(0), -1, 4))
@@ -303,9 +309,9 @@ class SSD(nn.Module):
 
 
 if __name__ == "__main__":
-    x = torch.randn(2, 3, 512, 512).to("cuda")
+    x = torch.randn(2, 3, 256, 512).to("cuda")
     #print(cfg)
-    ssd = SSD(cfg, connect_loc_to_conf=True).to("cuda")
+    ssd = SSD(cfg, connect_loc_to_conf=True, fix_size=False).to("cuda")
     loc, conf, prior = ssd(x, verbose=True)
     print(loc.shape)
     print(conf.shape)

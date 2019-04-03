@@ -19,6 +19,16 @@ def aug_sroie():
     aug_list.append(augmenters.Flipud(0.33, name="vertical_flip"))
     return aug_list
 
+def aug_sroie_dynamic():
+    """Perform image augmentation for dynamic input shape"""
+    aug_list = []
+    aug_list.append(augmenters.PadToFixedSize(width=1, height=1536, pad_cval=255))
+    aug_list.append(augmenters.Crop(percent=(0.15, 0.25), keep_size=False))
+    aug_list.append(augmenters.Resize(size={"height": 512, "width": "keep-aspect-ratio"}))
+    aug_list.append(augmenters.Fliplr(0.33, name="horizontal_flip"))
+    aug_list.append(augmenters.Flipud(0.33, name="vertical_flip"))
+    return aug_list
+
 def sroie_refine():
     aug_list = []
     stage_0, stage_1, stage_2, stage_3 = 1536, 2048, 768, 512

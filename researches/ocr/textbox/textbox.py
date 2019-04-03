@@ -192,7 +192,7 @@ def test_rotation():
         width_resize = round(width / gcd) * gcd
         resize_aug =augmenters.Sequential([
             augmenters.Resize(size={"height": 1472, "width": 512}),
-            augmenters.CropToFixedSize(height=768, width=512),
+            augmenters.CropToFixedSize(height=128, width=512),
         ])
         resize_aug = resize_aug.to_deterministic()
         image = resize_aug.augment_image(image)
@@ -244,7 +244,7 @@ def main():
         accuracy, precision, recall, f1_score = [], [], [], []
         print("\n =============== Cross Validation: %s/%s ================ " %
               (idx + 1, len(datasets)))
-        net = model.SSD(cfg, connect_loc_to_conf=True)
+        net = model.SSD(cfg, connect_loc_to_conf=True, fix_size=False)
         prior = net.prior
         net = torch.nn.DataParallel(net, device_ids=[0, 1, 2])
         # Input dimension of bbox is different in each step
