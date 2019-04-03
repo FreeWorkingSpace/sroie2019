@@ -9,17 +9,25 @@ def calculate_anchor_number(cfg, i):
     return len(cfg['box_ratios'][i]) + (0, len(cfg['box_ratios_large'][i]))[cfg['big_box']]
 
 
-def point_form(boxes):
+def point_form(boxes, img_ratio):
     """ Convert prior_boxes to (xmin, ymin, xmax, ymax)
     """
     # boxes[:, :2] represent the center_x and center_y
+    ratio_coefficiency = torch.Tensor([[1.0, 1.0, img_ratio, 1.0]]).repeat(boxes.size(0), 1)
+    if boxes.is_cuda:
+        ratio_coefficiency = ratio_coefficiency.cuda()
+    boxes = boxes / ratio_coefficiency
     return torch.cat((boxes[:, :2] - boxes[:, 2:]/2, boxes[:, :2] + boxes[:, 2:]/2), 1)
 
 
-def center_size(boxes):
+def center_size(prior, img_ratio):
     """ Convert prior_boxes to (cx, cy, w, h)
     """
-    return torch.cat([(boxes[:, 2:] + boxes[:, :2])/2, boxes[:, 2:] - boxes[:, :2]], 1)
+    ratio_coefficiency = torch.Tensor([[1.0, 1.0, img_ratio, 1.0]]).repeat(prior.size(0), 1)
+    if prior.is_cuda:
+        ratio_coefficiency = ratio_coefficiency.cuda()
+    boxes = torch.cat([(prior[:, 2:] + prior[:, :2]) / 2, prior[:, 2:] - prior[:, :2]], 1)
+    return boxes * ratio_coefficiency
 
 
 def box_jaccard(box_a, box_b):
@@ -129,7 +137,7 @@ def jaccard(box_a, box_b):
     return jac
     
 
-def match(cfg, threshold, truths, priors, variances, labels, loc_t, conf_t, idx, visualize=False, jaccard=jaccard):
+def match(cfg, threshold, truths, priors, variances, labels, loc_t, conf_t, idx, ratios, visualize=False, jaccard=jaccard):
     """Match each prior box with the ground truth box of the highest jaccard
     overlap, encode the bounding boxes, then return the matched indices
     corresponding to both confidence and location preds.
@@ -148,9 +156,9 @@ def match(cfg, threshold, truths, priors, variances, labels, loc_t, conf_t, idx,
     """
     # jaccard index
     if cfg['clip']:
-        overlaps = jaccard(truths, point_form(priors).clamp_(max=1, min=0))
+        overlaps = jaccard(truths, point_form(priors, ratios).clamp_(max=1, min=0))
     else:
-        overlaps = jaccard(truths, point_form(priors))
+        overlaps = jaccard(truths, point_form(priors, ratios))
     # 找到与每个ground truth boxes最接近的prior boxes的IOU和index, length = num_gt
     best_prior_overlap, best_prior_idx = overlaps.max(1, keepdim=True)
     # 找到与每个prior boxes最接近的ground truth boxes的IOU和index, lenght = num_prior

@@ -62,12 +62,12 @@ def print_box(red_boxes, shape=0, green_boxes=(), blue_boxes=(),
         plt.savefig(os.path.expanduser("~/Pictures/tmp.jpg"))
     plt.close()
     
-def visualize_overlaps(cfg, target, label, prior, idx):
+def visualize_overlaps(cfg, target, label, prior, ratio):
     images, subtitle, coords = [], [], []
 
     # conf中的1代表所有当前设置下与ground truth匹配的default box及其相应的index
     overlaps, conf = match(cfg, cfg['overlap_thresh'], target, prior,
-                           None, label, None, None, 0, visualize=True)
+                           None, label, None, None, 0, ratio, visualize=True)
     summary = "%s of %s positive samples"%(int(torch.sum(conf)), prior.size(0))
     crop_start = 0
 
@@ -84,7 +84,7 @@ def visualize_overlaps(cfg, target, label, prior, idx):
         idx = _conf == 1
         idx = list(np.where(idx.cpu().numpy() == 1)[0])
         for i in idx:
-            coords.append(point_form(prior[crop_start+i:crop_start+i+1, :]).clamp_(max=1, min=0).squeeze())
+            coords.append(point_form(prior[crop_start+i:crop_start+i+1, :], ratio).squeeze())
 
         # Reshape _conf into the shape of image so as to visualize it
         _conf = _conf.view(len(range(0, int(h), int(h_stride))), len(range(0, int(w), int(w_stride))), anchor_num)
@@ -107,6 +107,7 @@ def visualize_overlaps(cfg, target, label, prior, idx):
 
 def visualize_bbox(args, cfg, images, targets, prior=None, idx=0):
     print("Visualizing bound box...")
+    ratios = images.size(3) / images.size(2)
     batch = images.size(0)
     height, width = round(images.size(2) / 100) + 1, round(images.size(3) / 100)  * 2 + 1
     for i in range(batch):
@@ -123,7 +124,7 @@ def visualize_bbox(args, cfg, images, targets, prior=None, idx=0):
                                            edgecolor='r', facecolor='none'))
         if prior is not None:
             overlaps, summary, subtitle, coords = \
-                visualize_overlaps(cfg, bbox[:, :-1].data, bbox[:, -1].data, prior, i)
+                visualize_overlaps(cfg, bbox[:, :-1].data, bbox[:, -1].data, prior, ratios)
             for coord in coords:
                 x1, y1, x2, y2 = coord_to_rect(coord, h, w)
                 rects.append(patches.Rectangle((x1, y1), x2, y2, linewidth=1,

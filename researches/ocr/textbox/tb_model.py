@@ -45,7 +45,7 @@ cfg = {
     # Jaccard Distance Threshold
     'overlap_thresh': 0.7,
     # Whether to constrain the prior boxes inside the image
-    'clip': True,
+    'clip': False,
 }
 
 
@@ -258,18 +258,20 @@ class SSD(nn.Module):
                 for height in self.cfg['box_height'][k]:
                     s_k = height / input_size[0]
                     for box_ratio in self.cfg['box_ratios'][k]:
-                        mean += [cx, cy, s_k * box_ratio / input_ratio, s_k]
+                        mean += [cx, cy, s_k * box_ratio, s_k]
                 # Add prior boxes with different number aspect-ratio if the box is large
                 if big_box:
                     for height in self.cfg['box_height_large'][k]:
                         s_k_big = height / input_size[0]
                         for box_ratio_l in self.cfg['box_ratios_large'][k]:
-                            mean += [cx, cy, s_k_big * box_ratio_l / input_ratio, s_k_big]
+                            mean += [cx, cy, s_k_big * box_ratio_l, s_k_big]
         # back to torch land
-        output = torch.Tensor(mean).view(-1, 4)
+        prior_boxes = torch.Tensor(mean).view(-1, 4)
         if self.cfg['clip']:
-            output.clamp_(max=1, min=0)
-        return output
+            #boxes = center_size(prior_boxes, input_ratio)
+            prior_boxes.clamp_(max=1, min=0)
+            #prior_boxes = point_form(boxes, input_ratio)
+        return prior_boxes
 
     def forward(self, x, is_train=True, verbose=False):
         input_size = [x.size(2), x.size(3)]

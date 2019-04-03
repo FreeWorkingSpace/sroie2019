@@ -25,7 +25,7 @@ def aug_sroie_dynamic():
     aug_list.append(augmenters.PadToFixedSize(width=1, height=1536, pad_cval=255))
     aug_list.append(augmenters.Affine(translate_px=(-16, 16), cval=255))
     aug_list.append(augmenters.Crop(percent=(0.15, 0.25), keep_size=False))
-    aug_list.append(augmenters.Resize(size={"height": 512, "width": "keep-aspect-ratio"}))
+    aug_list.append(augmenters.Resize(size={"height": 768, "width": "keep-aspect-ratio"}))
     aug_list.append(augmenters.Fliplr(0.33, name="horizontal_flip"))
     aug_list.append(augmenters.Flipud(0.33, name="vertical_flip"))
     return aug_list

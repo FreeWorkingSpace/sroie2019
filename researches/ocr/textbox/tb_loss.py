@@ -43,7 +43,7 @@ class MultiBoxLoss(nn.Module):
         self.negpos_ratio = neg_pos
         self.balancer = cfg['alpha']
 
-    def forward(self, predictions, targets):
+    def forward(self, predictions, targets, ratios):
         """Multibox Loss
         Args:
             predictions (tuple): A tuple containing loc preds, conf preds,
@@ -69,7 +69,7 @@ class MultiBoxLoss(nn.Module):
             gt_labels = targets[idx][:, -1].data
             default_box = priors.data
             match(self.cfg, self.threshold, gt_coord, default_box, self.variance, gt_labels,
-                  loc_t, conf_t, idx)
+                  loc_t, conf_t, idx, ratios)
         if self.use_gpu:
             loc_t = loc_t.cuda()
             conf_t = conf_t.cuda()

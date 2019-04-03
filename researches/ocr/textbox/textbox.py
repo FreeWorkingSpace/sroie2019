@@ -38,13 +38,17 @@ def fit(args, cfg, net, dataset, optimizer, is_train):
         # Update variance and balance of loc_loss and conf_loss
         cfg['variance'] = [var * cfg['var_updater'] if var <= 0.95 else 1 for var in cfg['variance']]
         cfg['alpha'] *= cfg['alpha_updater']
-        for batch_idx, (image, targets) in enumerate(dataset):
-            image = image.cuda()
+        for batch_idx, (images, targets) in enumerate(dataset):
+            #if not net.fix_size:
+                #assert images.size(0) == 1, "batch size for dynamic input shape can only be 1 for 1 GPU RIGHT NOW!"
+            #print(images.shape)
+            images = images.cuda()
+            ratios = images.size(3) / images.size(2)
             targets = [ann.cuda() for ann in targets]
-            out = net(image, is_train)
+            out = net(images, is_train)
             # visualize_bbox(args, cfg, image, targets, net.prior)
             if is_train:
-                loss_l, loss_c = criterion(out, targets)
+                loss_l, loss_c = criterion(out, targets, ratios)
                 loss = loss_l + loss_c
                 Loss_L.append(float(loss_l.data))
                 Loss_C.append(float(loss_c.data))
@@ -57,7 +61,7 @@ def fit(args, cfg, net, dataset, optimizer, is_train):
                 visualize = False
                 if args.curr_epoch != 0 and args.curr_epoch % 10 == 0 and epoch==0:
                     visualize = True
-                _accuracy, _precision, _recall, _f1_score = evaluate(image, out.data, targets, batch_idx,
+                _accuracy, _precision, _recall, _f1_score = evaluate(images, out.data, targets, batch_idx,
                                                              visualize=visualize)
                 accuracy.append(_accuracy)
                 precision.append(_precision)
@@ -212,7 +216,7 @@ def test_rotation():
         # Prepare image tensor and test
         image = torch.Tensor(util.normalize_image(args, image)).unsqueeze(0)
         image = image.permute(0, 3, 1, 2).cuda()
-        visualize_bbox(args, cfg, image, [torch.Tensor(rot_coord).cuda()], net.prior)
+        visualize_bbox(args, cfg, image, [torch.Tensor(rot_coord).cuda()], net.prior, height_final/width_final)
         b, c, h, w = image.shape
         out = net(image, is_train=False)
 
