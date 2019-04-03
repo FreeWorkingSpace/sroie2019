@@ -231,7 +231,6 @@ class SSD(nn.Module):
 
     def create_prior(self, feature_map_size=None, input_size=None):
         """
-
         :param feature_map_size:
         :param input_size: When input size is not None. which means Dynamic Input Size
         :return:

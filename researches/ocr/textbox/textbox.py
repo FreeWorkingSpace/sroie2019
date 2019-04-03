@@ -41,7 +41,6 @@ def fit(args, cfg, net, dataset, optimizer, is_train):
         for batch_idx, (images, targets) in enumerate(dataset):
             #if not net.fix_size:
                 #assert images.size(0) == 1, "batch size for dynamic input shape can only be 1 for 1 GPU RIGHT NOW!"
-            #print(images.shape)
             images = images.cuda()
             ratios = images.size(3) / images.size(2)
             targets = [ann.cuda() for ann in targets]
@@ -239,16 +238,20 @@ def test_rotation():
 
 
 def main():
+    if args.fix_size:
+        aug = aug_sroie()
+    else:
+        aug = aug_sroie_dynamic()
     datasets = data.fetch_detection_data(args, sources=args.train_sources, k_fold=1,
                                          batch_size=args.batch_size, batch_size_val=1,
                                          auxiliary_info=args.train_aux, split_val=0.2,
-                                         pre_process=clahe_inv, aug=aug_sroie_dynamic())
+                                         pre_process=None, aug=aug)
     for idx, (train_set, val_set) in enumerate(datasets):
         loc_loss, conf_loss = [], []
         accuracy, precision, recall, f1_score = [], [], [], []
         print("\n =============== Cross Validation: %s/%s ================ " %
               (idx + 1, len(datasets)))
-        net = model.SSD(cfg, connect_loc_to_conf=True, fix_size=False)
+        net = model.SSD(cfg, connect_loc_to_conf=True, fix_size=args.fix_size)
         net = torch.nn.DataParallel(net, device_ids=[0, 1, 2])
         # Input dimension of bbox is different in each step
         cudnn.benchmark = False
