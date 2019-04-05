@@ -43,9 +43,12 @@ def fit(args, cfg, net, dataset, optimizer, is_train):
                 #assert images.size(0) == 1, "batch size for dynamic input shape can only be 1 for 1 GPU RIGHT NOW!"
             images = images.cuda()
             ratios = images.size(3) / images.size(2)
+            if ratios != 1.0:
+                print(ratios)
             targets = [ann.cuda() for ann in targets]
             out = net(images, is_train)
-            # visualize_bbox(args, cfg, image, targets, net.prior)
+            if args.curr_epoch == 0 and batch_idx == 0:
+                visualize_bbox(args, cfg, images, targets, net.prior, batch_idx)
             if is_train:
                 loss_l, loss_c = criterion(out, targets, ratios)
                 loss = loss_l + loss_c
@@ -95,7 +98,6 @@ def evaluate(img, detections, targets, batch_idx, visualize=False):
         pred = [[float(coor) for coor in area] for area in text_boxes]
         gt = [[float(coor) for coor in area] for area in gt_boxes]
         print_box(pred, green_boxes=gt, img=vb.plot_tensor(args, img, margin=0), idx=batch_idx)
-        #visualize_bbox(args, cfg, img, [coords], idx=batch_idx)
     return accuracy, precision, recall, f1_score
 
 
@@ -241,7 +243,8 @@ def main():
     if args.fix_size:
         aug = aug_sroie()
     else:
-        aug = aug_sroie_dynamic()
+        aug = aug_sroie_dynamic_2()
+        args.batch_size = torch.cuda.device_count()
     datasets = data.fetch_detection_data(args, sources=args.train_sources, k_fold=1,
                                          batch_size=args.batch_size, batch_size_val=1,
                                          auxiliary_info=args.train_aux, split_val=0.2,
@@ -252,7 +255,7 @@ def main():
         print("\n =============== Cross Validation: %s/%s ================ " %
               (idx + 1, len(datasets)))
         net = model.SSD(cfg, connect_loc_to_conf=True, fix_size=args.fix_size)
-        net = torch.nn.DataParallel(net, device_ids=[0, 1, 2])
+        net = torch.nn.DataParallel(net)
         # Input dimension of bbox is different in each step
         cudnn.benchmark = False
         net = net.cuda()

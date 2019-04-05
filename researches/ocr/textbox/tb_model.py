@@ -45,7 +45,7 @@ cfg = {
     # Jaccard Distance Threshold
     'overlap_thresh': 0.7,
     # Whether to constrain the prior boxes inside the image
-    'clip': False,
+    'clip': True,
 }
 
 
@@ -185,49 +185,6 @@ class SSD(nn.Module):
                                                     padding=[0, 1, 1], activation=None)
                 conf_layer.apply(init.init_cnn)
                 self.conf_layers.append(conf_layer)
-
-    def parallel_prior(self):
-        """
-        Create the prior in parallel manner, old version, do not use
-        Useful when the input image size is not fixed
-        Thus for each input image, prior boxes will be generated accordingly
-        """
-        def generate_grid(h, w, f_k, n):
-            x = np.expand_dims(np.linspace(0, h - 1, h), 0)
-            y = np.expand_dims(np.linspace(0, w - 1, w), 0)
-            x = np.repeat(x, w, axis=0).reshape((1, -1))
-            y = np.repeat(y, h, axis=1)
-            grid = np.concatenate([x, y], 0).transpose()
-            grid = (grid + 0.5) / f_k
-            grid = np.repeat(grid, n, axis=0)
-            return grid
-
-        priors = []
-        for k, f in enumerate(self.cfg['feature_map_sizes']):
-            n = (len(self.cfg['box_ratios'][k])) * (1, 2)[self.cfg['bidirection']] + \
-                1 + (0, 1)[self.cfg['big_box']]
-            f_k = self.cfg['input_img_size'] / self.cfg['zoom_level'][k]
-            s_k = self.cfg['box_height'][k] / self.cfg['input_img_size']
-            s_k_big = math.sqrt(s_k * (self.cfg['box_height_large'][k] / self.cfg['input_img_size']))
-            if type(f) is list or type(f) is tuple:
-                h, w = f[0], f[1]
-            else:
-                h, w = f, f
-            center_grid = generate_grid(h, w, f_k, n)
-            prior = np.tile(np.asarray([[s_k, s_k]]), (h * w * n, 1))
-            ratios = [[1.0, 1.0]]
-            if self.cfg['big_box']:
-                ratios += [[s_k_big / s_k, s_k_big / s_k]]
-            ratios += [[math.sqrt(ar), math.sqrt(1 / ar)] for ar in self.cfg['box_ratios'][k]]
-            if self.cfg['bidirection']:
-                ratios += [[math.sqrt(1 / ar), math.sqrt(ar)] for ar in self.cfg['box_ratios'][k]]
-            ratios = np.tile(np.asarray(ratios), (h * w, 1))
-            prior *= ratios
-            priors.append(np.concatenate([center_grid, prior], axis=1))
-            output = torch.from_numpy(np.concatenate(priors, axis=0)).float()
-            if self.cfg['clip']:
-                output.clamp_(max=1, min=0)
-        return output
 
     def create_prior(self, feature_map_size=None, input_size=None):
         """

@@ -57,7 +57,7 @@ def print_box(red_boxes, shape=0, green_boxes=(), blue_boxes=(),
     if title:
         plt.title(title)
     if idx is not None:
-        plt.savefig(os.path.expanduser("~/Pictures/batch_%s_pred.jpg" % (idx)))
+        plt.savefig(os.path.expanduser("~/Pictures/epoch_%s_pred.jpg" % (idx)))
     else:
         plt.savefig(os.path.expanduser("~/Pictures/tmp.jpg"))
     plt.close()
