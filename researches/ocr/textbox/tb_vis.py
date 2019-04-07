@@ -80,6 +80,12 @@ def visualize_overlaps(cfg, target, label, prior, ratio):
 
         # Get the index of matched prior boxes and collect these boxes
         _conf = conf[crop_start: crop_start + prior_num]
+        _overlaps = overlaps[crop_start: crop_start + prior_num]
+        best_prior_overlap, best_prior_idx = overlaps.max(1, keepdim=True)
+        best_prior_idx = best_prior_idx.squeeze(1)
+        
+        points = point_form(prior[best_prior_idx].cpu(), ratio)
+        
         matched_priors = int(torch.sum(_conf))
         idx = _conf == 1
         idx = list(np.where(idx.cpu().numpy() == 1)[0])

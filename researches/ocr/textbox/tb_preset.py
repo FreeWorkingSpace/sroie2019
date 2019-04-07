@@ -5,7 +5,7 @@ def GeneralPattern(args):
     # this will create a folder named "_text_detection" under "~/Pictures/dataset/ocr"
     args.code_name = "_text_detection"
     # Set it to True to make experiment result reproducible
-    args.deterministic_train = False
+    args.deterministic_train = True
     # Random seed for everything
     # If deterministic_train is disabled, then it will have no meaning
     args.seed = 1
