@@ -256,6 +256,7 @@ def main():
               (idx + 1, len(datasets)))
         net = model.SSD(cfg, connect_loc_to_conf=True, fix_size=args.fix_size)
         net = torch.nn.DataParallel(net)
+        
         # Input dimension of bbox is different in each step
         cudnn.benchmark = False
         net = net.cuda()
