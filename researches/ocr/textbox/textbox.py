@@ -48,7 +48,7 @@ def fit(args, cfg, net, dataset, optimizer, is_train):
             targets = [ann.cuda() for ann in targets]
             out = net(images, is_train)
             if args.curr_epoch == 0 and batch_idx == 0:
-                visualize_bbox(args, cfg, images, targets, net.prior, batch_idx)
+                visualize_bbox(args, cfg, images, targets, net.module.prior, batch_idx)
             if is_train:
                 loss_l, loss_c = criterion(out, targets, ratios)
                 loss = loss_l + loss_c
