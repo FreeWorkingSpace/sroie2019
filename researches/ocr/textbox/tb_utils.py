@@ -108,9 +108,7 @@ def intersect(box_a, box_b):
     min_xy = torch.max(box_a[:, :2].unsqueeze(1).expand(A, B, 2),
                        box_b[:, :2].unsqueeze(0).expand(A, B, 2))
     inter = torch.clamp((max_xy - min_xy), min=0)
-    # supress the matching of very wide boxes
-    # supressor = (inter[:, :, 0] / (inter[:, :, 1] + 1e-5)).clamp(min=1)
-    return inter[:, :, 0] * inter[:, :, 1]#, torch.pow(supressor, 1/5)
+    return inter[:, :, 0] * inter[:, :, 1]
     
 
 def jaccard(box_a, box_b):
@@ -131,9 +129,6 @@ def jaccard(box_a, box_b):
     area_b = ((box_b[:, 2]-box_b[:, 0]) *
               (box_b[:, 3]-box_b[:, 1])).unsqueeze(0).expand_as(inter)  # [A,B]
     jac = inter / (area_a + area_b - inter)
-    #mul_jac = inter / suppressor / (area_a + area_b - inter / suppressor)
-    # print(torch.sum(mul_jac > 0.9) - torch.sum(jac > 0.9))
-    # return mul_jac
     return jac
     
 
@@ -154,21 +149,29 @@ def match(cfg, threshold, truths, priors, variances, labels, loc_t, conf_t, idx,
     Return:
         The matched indices corresponding to 1)location and 2)confidence preds.
     """
-    # jaccard index
+    def calibrate(x):
+        mul = 0.7
+        trans = 1
+        x = x + 2 / x
+        y = 2 / (torch.sqrt(torch.tanh(mul * (x + trans)) + (mul * (x + trans))))
+        return y
     if cfg['clip']:
         overlaps = jaccard(truths, point_form(priors, ratios).clamp_(max=1, min=0))
     else:
         overlaps = jaccard(truths, point_form(priors, ratios))
+    prior_ratios = calibrate(priors[:, 2] / priors[:, 3]).unsqueeze(0).repeat(truths.size(0), 1)
+    overlaps = overlaps * prior_ratios
+
     # 找到与每个ground truth boxes最接近的prior boxes的IOU和index, length = num_gt
     best_prior_overlap, best_prior_idx = overlaps.max(1, keepdim=True)
-    # 找到与每个prior boxes最接近的ground truth boxes的IOU和index, lenght = num_prior
+    # 找到与每个prior boxes最接近的ground truth boxes的IOU和index, length = num_prior
     best_truth_overlap, best_truth_idx = overlaps.max(0, keepdim=True)
     best_truth_idx.squeeze_(0)
     best_truth_overlap.squeeze_(0)
     best_prior_idx.squeeze_(1)
     best_prior_overlap.squeeze_(1)
     # 剔除一些匹配度低的prior_idx
-    _best_prior_idx = best_prior_idx[best_prior_overlap > 0.5]
+    _best_prior_idx = best_prior_idx[best_prior_overlap > cfg['overlap_thresh'] * 0.75]
     # 将剔除后的_best_prior_idx中所对应的overlap变为2
     best_truth_overlap.index_fill_(0, _best_prior_idx, 2)
     for j in range(best_prior_idx.size(0)):
