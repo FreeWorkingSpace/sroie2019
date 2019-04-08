@@ -28,7 +28,7 @@ def GeneralPattern(args):
 
 
 def Unique_Patterns(args):
-    args.train_sources = ["SROIE2019_old"]
+    args.train_sources = ["SROIE2019"]
     args.train_aux = [{"txt": "txt", "img": "jpg"}]
     args.min_bbox_threshold = 0.01
     args.fix_size = True
