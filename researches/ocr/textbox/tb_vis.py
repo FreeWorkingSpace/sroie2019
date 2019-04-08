@@ -84,7 +84,8 @@ def visualize_overlaps(cfg, target, label, prior, ratio):
         best_prior_overlap, best_prior_idx = overlaps.max(1, keepdim=True)
         best_prior_idx = best_prior_idx.squeeze(1)
         
-        points = point_form(prior[best_prior_idx].cpu(), ratio)
+        #points = point_form(prior[best_prior_idx].cpu(), ratio)
+        #print_box(target, shape=? blue_boxes=points, step_by_step_b=True)
         
         matched_priors = int(torch.sum(_conf))
         idx = _conf == 1
