@@ -19,7 +19,7 @@ cfg = {
     'feature_map_sizes': [64, 32, 16],
     # For static input size only, when Dynamic mode is turned out, it will not be used
     # Must be 2d list or tuple
-    'input_img_size': [1024, 512],
+    'input_img_size': [512, 512],
     # See the visualization result by enabling visualize_bbox in function fit of textbox.py
     # And change the settings according to the result
     # Some possible settings of box_height and box_height_large
@@ -43,7 +43,7 @@ cfg = {
     'alpha': 1,
     'alpha_updater': 1,
     # Jaccard Distance Threshold
-    'overlap_thresh': 0.7,
+    'overlap_thresh': 0.45,
     # Whether to constrain the prior boxes inside the image
     'clip': True,
 }
@@ -159,22 +159,23 @@ class SSD(nn.Module):
         for i, in_channel in enumerate(cfg['loc_and_conf']):
             anchor = calculate_anchor_number(cfg, i)
             # Create Location Layer
-            loc_layer = omth_blocks.conv_block(in_channel, filters=[in_channel, int(in_channel / 2), anchor * 4],
-                                               kernel_sizes=[1, 3, 3], stride=[1, 1, cfg['stride'][i]],
-                                               padding=[0, 1, 1],
-                                               activation=None)
-            loc_layer.apply(init.init_cnn)
+            loc_layer = Loc_Layer(in_channel, anchor, cfg['stride'][i], incep_layer=True, in_wid=128)
             self.loc_layers.append(loc_layer)
             # Create Confidence Layer
             if self.connect_loc_to_conf:
-                conf_layer = omth_blocks.conv_block(in_channel, filters=[in_channel, int(in_channel / 2)],
-                                                    kernel_sizes=[1, 3], stride=[1, 1], padding=[0, 1], activation=None)
+                conf_layer = omth_blocks.InceptionBlock(in_channel, stride=[[1, 1, 1], [1, 1, 1], [1, 1, 1], [1, 1]],
+                                                        kernel_sizes=[[[7, 1], 3, 1], [[5, 1], 3, 1], [[3, 1], 3, 1], [3, 1]],
+                                                        filters=[[128, 128, 64], [128, 128, 64], [128, 128, 64], [192, 64]],
+                                                        padding=[[[3, 0], 1, 0], [[2, 0], 1, 0], [[1, 0], 1, 0], [1, 0]],
+                                                        batch_norm=None, inner_maxout=None)
+                #conf_layer = omth_blocks.conv_block(512, filters=[in_channel, int(in_channel / 2)],
+                                                    #kernel_sizes=[1, 3], stride=[1, 1], padding=[0, 1], activation=None)
                 conf_layer.apply(init.init_cnn)
                 self.conf_layers.append(conf_layer)
                 # In this layer, the output from loc_layer will be concatenated to the conf layer
                 # Feeding the conf layer with regressed location, helping the conf layer
                 # to get better prediction
-                conf_concat = omth_blocks.conv_block(int(in_channel / 2) + anchor * 4,
+                conf_concat = omth_blocks.conv_block(256 + anchor * 4,
                                                      filters=[int(in_channel / 4), anchor * 2], kernel_sizes=[1, 3],
                                                      stride=[1, cfg['stride'][i]], padding=[0, 1], activation=None)
                 conf_concat.apply(init.init_cnn)
@@ -264,6 +265,29 @@ class SSD(nn.Module):
         else:
             output = self.detect(locations, self.softmax(confidences), self.prior)
         return output
+
+class Loc_Layer(nn.Module):
+    def __init__(self, in_channel, anchor, stride, incep_layer=False, in_wid=128):
+        super().__init__()
+        self.incep_layer = incep_layer
+        if incep_layer:
+            self.loc_incep_layer = omth_blocks.InceptionBlock(in_channel, stride=[[1, 1, 1], [1, 1, 1], [1, 1, 1], [1, 1]],
+                                                         kernel_sizes=[[[7, 1], 3, 1], [[5, 1], 3, 1], [[3, 1], 3, 1],[3, 1]],
+                                                         filters=[[128, 128, in_wid], [128, 128, in_wid], [128, 128, in_wid], [192, in_wid]],
+                                                         padding=[[[3, 0], 1, 0], [[2, 0], 1, 0], [[1, 0], 1, 0], [1, 0]],
+                                                         batch_norm=None, inner_maxout=None)
+            self.loc_incep_layer.apply(init.init_cnn)
+        input_channel = in_wid * 4 if incep_layer else in_channel
+        self.loc_layer = omth_blocks.conv_block(input_channel, filters=[input_channel, int(input_channel / 2), anchor * 4],
+                               kernel_sizes=[3, 1, 3], stride=[1, 1, stride], padding=[0, 1, 1],
+                               activation=None)
+        self.loc_layer.apply(init.init_cnn)
+
+    def forward(self, x):
+        if self.incep_layer:
+            x = self.loc_incep_layer(x)
+        x = self.loc_layer(x)
+        return x
 
 
 if __name__ == "__main__":
