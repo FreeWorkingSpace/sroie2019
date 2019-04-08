@@ -26,7 +26,6 @@ def GeneralPattern(args):
     args.img_bias = (0.0, 0.0, 0.0)
     return args
 
-
 def Unique_Patterns(args):
     args.train_sources = ["SROIE2019"]
     args.train_aux = [{"txt": "txt", "img": "jpg"}]
