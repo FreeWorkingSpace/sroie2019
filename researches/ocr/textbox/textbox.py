@@ -79,7 +79,7 @@ def fit(args, cfg, net, dataset, optimizer, is_train):
             eval = np.mean(np.asarray(epoch_eval_result[key]).reshape((-1, 4)), axis=0)
             print(" --- Conf=%s: accuracy=%.4f, precision=%.4f, recall=%.4f, f1-score=%.4f  ---" %
                   (key, eval[0], eval[1], eval[2], eval[3]))
-            print("")
+        print("")
         # represent accuracy, precision, recall, f1_score
         return  eval[0], eval[1], eval[2], eval[3]
     else:
@@ -266,9 +266,8 @@ def main():
               (idx + 1, len(datasets)))
         net = model.SSD(cfg, connect_loc_to_conf=True)
         net = torch.nn.DataParallel(net)
-        
         # Input dimension of bbox is different in each step
-        cudnn.benchmark = False
+        cudnn.benchmark = True
         net = net.cuda()
         if args.finetune:
             net = util.load_latest_model(args, net, prefix="cv_1")

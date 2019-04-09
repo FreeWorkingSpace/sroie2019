@@ -11,8 +11,8 @@ def GeneralPattern(args):
     args.seed = 1
     # Training Hyperparameter
     args.learning_rate = 1e-4
-    args.batch_size = 24
-    args.loading_threads = 6
+    args.batch_size = 64
+    args.loading_threads = 24
     args.img_channel = 3
     args.epoch_num = 2000
     args.finetune = True
