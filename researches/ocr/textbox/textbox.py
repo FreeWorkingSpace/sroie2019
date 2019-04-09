@@ -62,9 +62,9 @@ def fit(args, cfg, net, dataset, optimizer, is_train):
                     continue
                 visualize = False
                 if args.curr_epoch != 0 and args.curr_epoch % 10 == 0 and epoch==0:
+                    print("Visualizing prediction result...")
                     visualize = True
-                eval_result = evaluate(images, out.data, targets, batch_idx,
-                                                             visualize=visualize)
+                eval_result = evaluate(images, out.data, targets, batch_idx, visualize=visualize)
                 for key in eval_result.keys():
                     if key in epoch_eval_result:
                         epoch_eval_result[key] += eval_result[key]
@@ -103,7 +103,6 @@ def evaluate(img, detections, targets, batch_idx, visualize=False):
         else:
             f1_score = 2 * (recall * precision) / (recall + precision)
         if visualize and threshold == 0.4:
-            print("Visualizing prediction result...")
             pred = [[float(coor) for coor in area] for area in text_boxes]
             gt = [[float(coor) for coor in area] for area in gt_boxes]
             print_box(pred, green_boxes=gt, img=vb.plot_tensor(args, img, margin=0), idx=batch_idx)
@@ -264,7 +263,7 @@ def main():
         accuracy, precision, recall, f1_score = [], [], [], []
         print("\n =============== Cross Validation: %s/%s ================ " %
               (idx + 1, len(datasets)))
-        net = model.SSD(cfg, connect_loc_to_conf=True)
+        net = model.SSD(cfg, connect_loc_to_conf=True, fix_size=args.fix_size)
         net = torch.nn.DataParallel(net)
         # Input dimension of bbox is different in each step
         cudnn.benchmark = True

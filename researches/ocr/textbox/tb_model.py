@@ -123,6 +123,9 @@ class SSD(nn.Module):
         self.softmax = nn.Softmax(dim=-1)
         self.detect = Detect(self.num_classes, 0, 200, 0.01, 0.45)
         self.connect_loc_to_conf = connect_loc_to_conf
+        self.fix_size = fix_size
+        if fix_size:
+            self.prior = self.create_prior().cuda()
 
         # Prepare VGG-16 net with batch normalization
         vgg16_model = vgg16_bn(pretrained=True)
@@ -196,6 +199,8 @@ class SSD(nn.Module):
         if feature_map_size is None:
             assert len(self.cfg['feature_map_sizes']) >= len(self.cfg['conv_output'])
             feature_map_size = self.cfg['feature_map_sizes']
+        if input_size is None:
+            input_size = cfg['input_img_size']
         assert len(input_size) == 2, "input_size should be either int or list of int with 2 elements"
         input_ratio = input_size[1] / input_size[0]
         for k in range(len(self.cfg['conv_output'])):
