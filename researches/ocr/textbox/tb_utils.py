@@ -152,8 +152,8 @@ def match(cfg, threshold, truths, priors, variances, labels, loc_t, conf_t, idx,
     def calibrate(x):
         mul = 0.7
         trans = 1
-        x = x + 2 / x
-        y = 2 / (torch.sqrt(torch.tanh(mul * (x + trans)) + (mul * (x + trans))))
+        t = x + 2 / x
+        y = 2 / (torch.sqrt(torch.tanh(mul * (t + trans)) + (mul * (t + trans)))) + x / 150
         return y
     if cfg['clip']:
         overlaps = jaccard(truths, point_form(priors, ratios).clamp_(max=1, min=0))

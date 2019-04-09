@@ -31,7 +31,7 @@ def fit(args, cfg, net, dataset, optimizer, is_train):
     else:
         net.eval()
     Loss_L, Loss_C = [], []
-    accuracy, precision, recall, f1_score = [], [], [], []
+    epoch_eval_result = {}
     for epoch in range(args.epoches_per_phase):
         start_time = time.time()
         criterion = MultiBoxLoss(cfg, neg_pos=3)
@@ -63,20 +63,25 @@ def fit(args, cfg, net, dataset, optimizer, is_train):
                 visualize = False
                 if args.curr_epoch != 0 and args.curr_epoch % 10 == 0 and epoch==0:
                     visualize = True
-                _accuracy, _precision, _recall, _f1_score = evaluate(images, out.data, targets, batch_idx,
+                eval_result = evaluate(images, out.data, targets, batch_idx,
                                                              visualize=visualize)
-                accuracy.append(_accuracy)
-                precision.append(_precision)
-                recall.append(_recall)
-                f1_score.append(_f1_score)
+                for key in eval_result.keys():
+                    if key in epoch_eval_result:
+                        epoch_eval_result[key] += eval_result[key]
+                    else:
+                        epoch_eval_result.update({key: eval_result[key]})
         if is_train:
             args.curr_epoch += 1
             print(" --- loc loss: %.4f, conf loss: %.4f, at epoch %04d, cost %.2f seconds ---" %
                   (avg(Loss_L), avg(Loss_C), args.curr_epoch + 1, time.time() - start_time))
     if not is_train:
-        print(" --- accuracy: %.4f, precision: %.4f, recall %.4f, f1-score: %.4f  ---\n" %
-              (avg(accuracy), avg(precision), avg(recall), avg(f1_score)))
-        return avg(accuracy), avg(precision), avg(recall), avg(f1_score)
+        for key in epoch_eval_result.keys():
+            eval = np.mean(np.asarray(epoch_eval_result[key]).reshape((-1, 4)), axis=0)
+            print(" --- Conf=%s: accuracy=%.4f, precision=%.4f, recall=%.4f, f1-score=%.4f  ---" %
+                  (key, eval[0], eval[1], eval[2], eval[3]))
+            print("")
+        # represent accuracy, precision, recall, f1_score
+        return  eval[0], eval[1], eval[2], eval[3]
     else:
         return avg(Loss_L), avg(Loss_C)
 
@@ -86,19 +91,24 @@ def val(args, cfg, net, dataset, optimizer, prior):
 
 
 def evaluate(img, detections, targets, batch_idx, visualize=False):
-    idx = detections[0, 1, :, 0] >= 0.3
-    text_boxes = detections[0, 1, idx, 1:]
-    gt_boxes = targets[0][:, :-1].data
-    accuracy, precision, recall = measure(text_boxes, gt_boxes)
-    if (recall + precision) < 1e-3:
-        f1_score = 0
-    else:
-        f1_score = 2 * (recall * precision) / (recall + precision)
-    if visualize:
-        pred = [[float(coor) for coor in area] for area in text_boxes]
-        gt = [[float(coor) for coor in area] for area in gt_boxes]
-        print_box(pred, green_boxes=gt, img=vb.plot_tensor(args, img, margin=0), idx=batch_idx)
-    return accuracy, precision, recall, f1_score
+    conf_thresholds = [0.2, 0.3, 0.4, 0.5, 0.6]
+    eval_result = {}
+    for threshold in conf_thresholds:
+        idx = detections[0, 1, :, 0] >= threshold
+        text_boxes = detections[0, 1, idx, 1:]
+        gt_boxes = targets[0][:, :-1].data
+        accuracy, precision, recall = measure(text_boxes, gt_boxes)
+        if (recall + precision) < 1e-3:
+            f1_score = 0
+        else:
+            f1_score = 2 * (recall * precision) / (recall + precision)
+        if visualize and threshold == 0.4:
+            print("Visualizing prediction result...")
+            pred = [[float(coor) for coor in area] for area in text_boxes]
+            gt = [[float(coor) for coor in area] for area in gt_boxes]
+            print_box(pred, green_boxes=gt, img=vb.plot_tensor(args, img, margin=0), idx=batch_idx)
+        eval_result.update({threshold: [accuracy, precision, recall, f1_score]})
+    return eval_result
 
 
 def measure(pred_boxes, gt_boxes):
@@ -247,14 +257,14 @@ def main():
         args.batch_size = torch.cuda.device_count()
     datasets = data.fetch_detection_data(args, sources=args.train_sources, k_fold=1,
                                          batch_size=args.batch_size, batch_size_val=1,
-                                         auxiliary_info=args.train_aux, split_val=0.2,
+                                         auxiliary_info=args.train_aux, split_val=0.1,
                                          pre_process=None, aug=aug)
     for idx, (train_set, val_set) in enumerate(datasets):
         loc_loss, conf_loss = [], []
         accuracy, precision, recall, f1_score = [], [], [], []
         print("\n =============== Cross Validation: %s/%s ================ " %
               (idx + 1, len(datasets)))
-        net = model.SSD(cfg, connect_loc_to_conf=True, fix_size=args.fix_size)
+        net = model.SSD(cfg, connect_loc_to_conf=True)
         net = torch.nn.DataParallel(net)
         
         # Input dimension of bbox is different in each step

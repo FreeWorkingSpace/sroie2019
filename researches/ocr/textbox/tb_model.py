@@ -123,9 +123,6 @@ class SSD(nn.Module):
         self.softmax = nn.Softmax(dim=-1)
         self.detect = Detect(self.num_classes, 0, 200, 0.01, 0.45)
         self.connect_loc_to_conf = connect_loc_to_conf
-        self.fix_size = fix_size
-        if fix_size:
-            self.prior = self.create_prior().cuda()
 
         # Prepare VGG-16 net with batch normalization
         vgg16_model = vgg16_bn(pretrained=True)
@@ -199,8 +196,6 @@ class SSD(nn.Module):
         if feature_map_size is None:
             assert len(self.cfg['feature_map_sizes']) >= len(self.cfg['conv_output'])
             feature_map_size = self.cfg['feature_map_sizes']
-        if self.fix_size:
-            input_size = cfg['input_img_size']
         assert len(input_size) == 2, "input_size should be either int or list of int with 2 elements"
         input_ratio = input_size[1] / input_size[0]
         for k in range(len(self.cfg['conv_output'])):
@@ -245,8 +240,8 @@ class SSD(nn.Module):
                 if len(conv_output) == len(self.output_list):
                     # Doesn't need to compute further convolutional output
                     break
-        if not self.fix_size:
-            self.prior = self.create_prior(feature_map_size=feature_shape, input_size=input_size).cuda()
+        #if not self.fix_size:
+        self.prior = self.create_prior(feature_map_size=feature_shape, input_size=input_size).cuda()
         for i, x in enumerate(conv_output):
             loc = self.loc_layers[i](x)
             locations.append(loc.permute(0, 2, 3, 1).contiguous().view(loc.size(0), -1, 4))
@@ -271,11 +266,18 @@ class Loc_Layer(nn.Module):
         super().__init__()
         self.incep_layer = incep_layer
         if incep_layer:
+
             self.loc_incep_layer = omth_blocks.InceptionBlock(in_channel, stride=[[1, 1, 1], [1, 1, 1], [1, 1, 1], [1, 1]],
                                                          kernel_sizes=[[[7, 1], 3, 1], [[5, 1], 3, 1], [[3, 1], 3, 1],[3, 1]],
                                                          filters=[[128, 128, in_wid], [128, 128, in_wid], [128, 128, in_wid], [192, in_wid]],
                                                          padding=[[[3, 0], 1, 0], [[2, 0], 1, 0], [[1, 0], 1, 0], [1, 0]],
                                                          batch_norm=None, inner_maxout=None)
+            """
+            self.loc_incep_layer = omth_blocks.InceptionBlock(in_channel,stride=[[1, 1, 1], [1, 1], [1, 1], [1, 1]],
+                                                              kernel_sizes=[[[5, 1], [3, 1], 3], [[3, 1], 3], [[1, 3], 3], [1, 3]],
+                                                              filters=[[128, 128, in_wid], [128, in_wid], [128, in_wid], [128, in_wid]],
+                                                              padding=[[[2, 0], [1, 0], 1], [[1, 0], 1], [[1, 0], 1], [0, 1]],
+                                                              batch_norm=None, inner_maxout=None)"""
             self.loc_incep_layer.apply(init.init_cnn)
         input_channel = in_wid * 4 if incep_layer else in_channel
         self.loc_layer = omth_blocks.conv_block(input_channel, filters=[input_channel, int(input_channel / 2), anchor * 4],
@@ -291,9 +293,9 @@ class Loc_Layer(nn.Module):
 
 
 if __name__ == "__main__":
-    x = torch.randn(2, 3, 256, 512).to("cuda")
+    x = torch.randn(2, 3, 512, 512).to("cuda")
     #print(cfg)
-    ssd = SSD(cfg, connect_loc_to_conf=True, fix_size=False).to("cuda")
+    ssd = SSD(cfg, connect_loc_to_conf=True).to("cuda")
     loc, conf, prior = ssd(x, verbose=True)
     print(loc.shape)
     print(conf.shape)
