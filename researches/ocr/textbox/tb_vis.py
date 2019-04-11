@@ -124,7 +124,7 @@ def visualize_bbox(args, cfg, images, targets, prior=None, idx=0):
     print("Visualizing bound box...")
     ratios = images.size(3) / images.size(2)
     batch = images.size(0)
-    height, width = round(images.size(2) / 100) + 1, round(images.size(3) / 100)  * 2 + 1
+    height, width = images.size(2) / 100 + 1, images.size(3) / 50 + 1
     for i in range(batch):
         image = images[i:i+1, :, :, :]
         bbox = targets[i]
@@ -135,7 +135,7 @@ def visualize_bbox(args, cfg, images, targets, prior=None, idx=0):
         rects = []
         for point in bbox:
             x1, y1, x2, y2 = coord_to_rect(point, h, w)
-            rects.append(patches.Rectangle((x1, y1), x2, y2, linewidth=1,
+            rects.append(patches.Rectangle((x1, y1), x2, y2, linewidth=2,
                                            edgecolor='r', facecolor='none'))
         if prior is not None:
             overlaps, summary, subtitle, coords = \
@@ -143,7 +143,7 @@ def visualize_bbox(args, cfg, images, targets, prior=None, idx=0):
             for coord in coords:
                 x1, y1, x2, y2 = coord_to_rect(coord, h, w)
                 rects.append(patches.Rectangle((x1, y1), x2, y2, linewidth=1,
-                                               edgecolor='b', facecolor='none'))
+                                               edgecolor='b', facecolor='none', alpha=0.3))
         else:
             overlaps = []
             summary = ""
@@ -161,6 +161,6 @@ def visualize_bbox(args, cfg, images, targets, prior=None, idx=0):
             ax0.add_patch(rect)
         plt.grid(False)
         plt.tight_layout()
-        plt.savefig(os.path.expanduser("~/Pictures/batch_%s_sample_%s.jpg"%(idx, i)))
+        plt.savefig(os.path.join(args.log_dir, "batch_%s_sample_vis_%s.jpg"%(idx, i)))
         plt.close()
 
