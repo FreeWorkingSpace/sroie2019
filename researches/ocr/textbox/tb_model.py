@@ -159,7 +159,7 @@ class SSD(nn.Module):
         for i, in_channel in enumerate(cfg['loc_and_conf']):
             anchor = calculate_anchor_number(cfg, i)
             # Create Location Layer
-            loc_layer = Loc_Layer(in_channel, anchor, cfg['stride'][i], incep_layer=incep_loc, in_wid=128)
+            loc_layer = Loc_Layer(in_channel, anchor, cfg['stride'][i], incep_loc=incep_loc, in_wid=128)
             self.loc_layers.append(loc_layer)
             # Create Confidence Layer
             if self.connect_loc_to_conf:
@@ -270,24 +270,74 @@ class SSD(nn.Module):
         return output
 
 class Loc_Layer(nn.Module):
-    def __init__(self, in_channel, anchor, stride, incep_layer=False, in_wid=128):
+    def __init__(self, in_channel, anchor, stride, incep_loc=False, in_wid=128, batch_norm=nn.BatchNorm2d):
         super().__init__()
-        self.incep_layer = incep_layer
-        if incep_layer:
+        self.loc_layer = nn.ModuleList([])
+        self.loc_layer.append(omth_blocks.conv_block(in_channel, [in_channel, in_channel], kernel_sizes=[3, 1],
+                                                     stride=[1, 1], padding=[3, 0], dilation=[3, 1], batch_norm=batch_norm))
+        if incep_loc:
+            self.loc_layer.append(omth_blocks.InceptionBlock(
+                512, filters=[[128, 128, in_wid], [128, 128, in_wid], [128, 128, in_wid], [192, in_wid]],
+                kernel_sizes=[[[7, 1], 3, 1], [[5, 1], 3, 1], [[3, 1], 3, 1], [3, 1]],
+                stride=[[1, 1, 1], [1, 1, 1], [1, 1, 1], [1, 1]],
+                padding=[[[3, 0], 1, 0], [[2, 0], 1, 0], [[1, 0], 1, 0], [1, 0]],
+                batch_norm=None, inner_maxout=None)
+            )
+        input_channel = in_wid * 4 if incep_loc else in_channel
+        self.loc_layer.append(omth_blocks.conv_block(
+            input_channel, filters=[input_channel, int(input_channel / 2), anchor * 4],
+            kernel_sizes=[3, 1, 3], stride=[1, 1, stride], padding=[0, 1, 1], activation=None)
+        )
+        self.loc_layer.apply(init.init_cnn)
 
+    def forward(self, x):
+        for layer in self.loc_layer:
+            x = layer(x)
+        return x
+    
+class Conf_Layer(nn.Module):
+    def __init__(self, in_channel, anchor, stride, incep_conf=False, cancat_loc=True, in_wid=128):
+        super().__init__()
+        self.cancat_loc = cancat_loc
+
+        if self.connect_loc_to_conf:
+            if incep_conf:
+                conf_layer = omth_blocks.InceptionBlock(in_channel, stride=[[1, 1, 1], [1, 1, 1], [1, 1, 1], [1, 1]],
+                                                        kernel_sizes=[[[7, 1], 3, 1], [[5, 1], 3, 1], [[3, 1], 3, 1],
+                                                                      [3, 1]],
+                                                        filters=[[128, 128, 64], [128, 128, 64], [128, 128, 64],
+                                                                 [192, 64]],
+                                                        padding=[[[3, 0], 1, 0], [[2, 0], 1, 0], [[1, 0], 1, 0],
+                                                                 [1, 0]],
+                                                        batch_norm=None, inner_maxout=None)
+            else:
+                conf_layer = omth_blocks.conv_block(512, filters=[in_channel, int(in_channel / 2)],
+                                                    kernel_sizes=[1, 3], stride=[1, 1], padding=[0, 1], activation=None)
+            conf_layer.apply(init.init_cnn)
+            self.conf_layers.append(conf_layer)
+            # In this layer, the output from loc_layer will be concatenated to the conf layer
+            # Feeding the conf layer with regressed location, helping the conf layer
+            # to get better prediction
+            self.conf_concate = omth_blocks.conv_block(256 + anchor * 4,
+                                                 filters=[int(in_channel / 4), anchor * 2], kernel_sizes=[1, 3],
+                                                 stride=[1, stride], padding=[0, 1], activation=None)
+            self.conf_concate.apply(init.init_cnn)
+        else:
+            print("incep_conf is turned off due to connect_loc_to_conf is False")
+            conf_layer = omth_blocks.conv_block(in_channel, filters=[in_channel, int(in_channel / 2), anchor * 2],
+                                                kernel_sizes=[1, 3, 3], stride=[1, 1, stride],
+                                                padding=[0, 1, 1], activation=None)
+            conf_layer.apply(init.init_cnn)
+            self.conf_layers.append(conf_layer)
+        
+        if incep_conf:
             self.loc_incep_layer = omth_blocks.InceptionBlock(in_channel, stride=[[1, 1, 1], [1, 1, 1], [1, 1, 1], [1, 1]],
                                                          kernel_sizes=[[[7, 1], 3, 1], [[5, 1], 3, 1], [[3, 1], 3, 1],[3, 1]],
                                                          filters=[[128, 128, in_wid], [128, 128, in_wid], [128, 128, in_wid], [192, in_wid]],
                                                          padding=[[[3, 0], 1, 0], [[2, 0], 1, 0], [[1, 0], 1, 0], [1, 0]],
                                                          batch_norm=None, inner_maxout=None)
-            """
-            self.loc_incep_layer = omth_blocks.InceptionBlock(in_channel,stride=[[1, 1, 1], [1, 1], [1, 1], [1, 1]],
-                                                              kernel_sizes=[[[5, 1], [3, 1], 3], [[3, 1], 3], [[1, 3], 3], [1, 3]],
-                                                              filters=[[128, 128, in_wid], [128, in_wid], [128, in_wid], [128, in_wid]],
-                                                              padding=[[[2, 0], [1, 0], 1], [[1, 0], 1], [[1, 0], 1], [0, 1]],
-                                                              batch_norm=None, inner_maxout=None)"""
             self.loc_incep_layer.apply(init.init_cnn)
-        input_channel = in_wid * 4 if incep_layer else in_channel
+        input_channel = in_wid * 4 if incep_conf else in_channel
         self.loc_layer = omth_blocks.conv_block(input_channel, filters=[input_channel, int(input_channel / 2), anchor * 4],
                                kernel_sizes=[3, 1, 3], stride=[1, 1, stride], padding=[0, 1, 1],
                                activation=None)
