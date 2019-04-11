@@ -1,4 +1,4 @@
-import os, time, sys, math, random, glob
+import os, time, sys, math, random, glob, datetime
 sys.path.append(os.path.expanduser("~/Documents/sroie2019"))
 import cv2, torch
 import numpy as np
@@ -22,6 +22,7 @@ cfg = model.cfg
 args = util.get_args(preset.PRESET)
 if not torch.cuda.is_available():
     raise RuntimeError("Need cuda devices")
+dt = datetime.datetime.now().strftime("%Y-%m-%d_%H:%M")
 
 def fit(args, cfg, net, dataset, optimizer, is_train):
     def avg(list):
@@ -33,6 +34,10 @@ def fit(args, cfg, net, dataset, optimizer, is_train):
     Loss_L, Loss_C = [], []
     epoch_eval_result = {}
     for epoch in range(args.epoches_per_phase):
+        visualize = False
+        if args.curr_epoch != 0 and args.curr_epoch % 10 == 0 and epoch == 0:
+            print("Visualizing prediction result...")
+            visualize = True
         start_time = time.time()
         criterion = MultiBoxLoss(cfg, neg_pos=3)
         # Update variance and balance of loc_loss and conf_loss
@@ -60,10 +65,6 @@ def fit(args, cfg, net, dataset, optimizer, is_train):
             else:
                 if len(targets) == 0:
                     continue
-                visualize = False
-                if args.curr_epoch != 0 and args.curr_epoch % 10 == 0 and epoch==0:
-                    print("Visualizing prediction result...")
-                    visualize = True
                 eval_result = evaluate(images, out.data, targets, batch_idx, visualize=visualize)
                 for key in eval_result.keys():
                     if key in epoch_eval_result:
@@ -75,7 +76,7 @@ def fit(args, cfg, net, dataset, optimizer, is_train):
             print(" --- loc loss: %.4f, conf loss: %.4f, at epoch %04d, cost %.2f seconds ---" %
                   (avg(Loss_L), avg(Loss_C), args.curr_epoch + 1, time.time() - start_time))
     if not is_train:
-        for key in epoch_eval_result.keys():
+        for key in sorted(epoch_eval_result.keys()):
             eval = np.mean(np.asarray(epoch_eval_result[key]).reshape((-1, 4)), axis=0)
             print(" --- Conf=%s: accuracy=%.4f, precision=%.4f, recall=%.4f, f1-score=%.4f  ---" %
                   (key, eval[0], eval[1], eval[2], eval[3]))
@@ -91,12 +92,28 @@ def val(args, cfg, net, dataset, optimizer, prior):
 
 
 def evaluate(img, detections, targets, batch_idx, visualize=False):
-    conf_thresholds = [0.2, 0.3, 0.4, 0.5, 0.6]
+    conf_thresholds = [0.1, 0.2, 0.3, 0.4]
     eval_result = {}
     for threshold in conf_thresholds:
         idx = detections[0, 1, :, 0] >= threshold
-        text_boxes = detections[0, 1, idx, 1:]
+        boxes = detections[0, 1, idx, 1:]
         gt_boxes = targets[0][:, :-1].data
+
+        if gt_boxes.size(0) == 0:
+            print("No ground truth box in this patch")
+            break
+        if boxes.size(0) == 0:
+            print("No predicted box in this patch")
+            break
+
+        # Eliminate overlap area smaller than 0.5
+        jac = jaccard(boxes, gt_boxes)
+        overlap, idx = jac.max(1, keepdim=True)
+        text_boxes = boxes[overlap.squeeze(1) > 0.5]
+        text_boxes_eliminated = boxes[overlap.squeeze(1) <= 0.5]
+        if text_boxes_eliminated.size(0) == 0:
+            text_boxes_eliminated = tuple()
+
         accuracy, precision, recall = measure(text_boxes, gt_boxes)
         if (recall + precision) < 1e-3:
             f1_score = 0
@@ -105,7 +122,8 @@ def evaluate(img, detections, targets, batch_idx, visualize=False):
         if visualize and threshold == 0.4:
             pred = [[float(coor) for coor in area] for area in text_boxes]
             gt = [[float(coor) for coor in area] for area in gt_boxes]
-            print_box(pred, green_boxes=gt, img=vb.plot_tensor(args, img, margin=0), idx=batch_idx)
+            print_box(text_boxes_eliminated, green_boxes=gt, blue_boxes=pred, idx=batch_idx,
+                      img=vb.plot_tensor(args, img, margin=0), save_dir=args.val_log)
         eval_result.update({threshold: [accuracy, precision, recall, f1_score]})
     return eval_result
 
@@ -253,30 +271,33 @@ def main():
         aug = aug_sroie()
     else:
         aug = aug_sroie_dynamic_2()
-        args.batch_size = torch.cuda.device_count()
+        args.batch_size_per_gpu = 1
     datasets = data.fetch_detection_data(args, sources=args.train_sources, k_fold=1,
-                                         batch_size=args.batch_size, batch_size_val=1,
-                                         auxiliary_info=args.train_aux, split_val=0.1,
+                                         batch_size=args.batch_size_per_gpu * torch.cuda.device_count(),
+                                         batch_size_val=1, auxiliary_info=args.train_aux, split_val=0.1,
                                          pre_process=None, aug=aug)
     for idx, (train_set, val_set) in enumerate(datasets):
         loc_loss, conf_loss = [], []
         accuracy, precision, recall, f1_score = [], [], [], []
         print("\n =============== Cross Validation: %s/%s ================ " %
               (idx + 1, len(datasets)))
-        net = model.SSD(cfg, connect_loc_to_conf=True, fix_size=args.fix_size)
+        net = model.SSD(cfg, connect_loc_to_conf=True, fix_size=args.fix_size,
+                        incep_conf=True, incep_loc=True)
         net = torch.nn.DataParallel(net)
         # Input dimension of bbox is different in each step
         cudnn.benchmark = True
         net = net.cuda()
+        if args.fix_size:
+            net.module.prior = net.module.prior.cuda()
         if args.finetune:
             net = util.load_latest_model(args, net, prefix="cv_1")
         # Using the latest optimizer, better than Adam and SGD
         optimizer = AdaBound(net.parameters(), lr=args.learning_rate, weight_decay=args.weight_decay,)
 
         for epoch in range(args.epoch_num):
-            loc_avg, conf_abg = fit(args, cfg, net, train_set, optimizer, is_train=True)
+            loc_avg, conf_avg = fit(args, cfg, net, train_set, optimizer, is_train=True)
             loc_loss.append(loc_avg)
-            conf_loss.append(conf_abg)
+            conf_loss.append(conf_avg)
             train_losses = [np.asarray(loc_loss), np.asarray(conf_loss)]
             if val_set is not None:
                 accu, pre, rec, f1 = fit(args, cfg, net, val_set, optimizer, is_train=False)
@@ -290,13 +311,11 @@ def main():
                 util.save_model(args, args.curr_epoch, net.state_dict(), prefix="cv_%s" % (idx + 1),
                                 keep_latest=20)
             if epoch > 5:
-                # Visualize the graph change of train losses and val metrics
                 # Train losses
-                vb.plot_loss_distribution(train_losses, ["location", "confidence"],
-                                          args.log_dir, "Loc_and_Conf", window=5, epoch=idx)
+                vb.plot_loss_distribution(train_losses, ["location", "confidence"], args.log_dir, dt + "_loss", window=5)
                 # Val metrics
-                vb.plot_loss_distribution(val_losses, ["Accuracy", "Precision", "Recall", "F1-Score"],
-                                          args.log_dir, "Validation_Measure", window=5, epoch=idx)
+                vb.plot_loss_distribution(val_losses, ["Accuracy", "Precision", "Recall", "F1-Score"], args.log_dir,
+                                          dt + "_val", window=5, bound=[0.0, 1.0])
         # Clean the data for next cross validation
         del net, optimizer
         args.curr_epoch = 0

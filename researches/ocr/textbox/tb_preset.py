@@ -1,21 +1,19 @@
-import torch
-
 def GeneralPattern(args):
     args.path = "~/Pictures/dataset/ocr"
     # this will create a folder named "_text_detection" under "~/Pictures/dataset/ocr"
     args.code_name = "_text_detection"
     # Set it to True to make experiment result reproducible
-    args.deterministic_train = False
+    args.deterministic_train = True
     # Random seed for everything
     # If deterministic_train is disabled, then it will have no meaning
     args.seed = 1
     # Training Hyperparameter
     args.learning_rate = 1e-4
-    args.batch_size = 64
-    args.loading_threads = 24
+    args.batch_size_per_gpu = 8
+    args.loading_threads = 2
     args.img_channel = 3
     args.epoch_num = 2000
-    args.finetune = False
+    args.finetune = True
 
     # Because augmentation operation is defined in tb_augment.py
     args.do_imgaug = False

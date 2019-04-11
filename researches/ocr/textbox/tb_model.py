@@ -110,7 +110,7 @@ class Detect(Function):
 
 class SSD(nn.Module):
     def __init__(self, cfg, in_channel=512, batch_norm=nn.BatchNorm2d, fix_size=True,
-                 connect_loc_to_conf=False):
+                 connect_loc_to_conf=False, incep_loc=False, incep_conf=False):
         super().__init__()
         self.cfg = cfg
         self.num_classes = cfg['num_classes']
@@ -125,7 +125,7 @@ class SSD(nn.Module):
         self.connect_loc_to_conf = connect_loc_to_conf
         self.fix_size = fix_size
         if fix_size:
-            self.prior = self.create_prior().cuda()
+            self.prior = self.create_prior()#.cuda()
 
         # Prepare VGG-16 net with batch normalization
         vgg16_model = vgg16_bn(pretrained=True)
@@ -159,17 +159,19 @@ class SSD(nn.Module):
         for i, in_channel in enumerate(cfg['loc_and_conf']):
             anchor = calculate_anchor_number(cfg, i)
             # Create Location Layer
-            loc_layer = Loc_Layer(in_channel, anchor, cfg['stride'][i], incep_layer=True, in_wid=128)
+            loc_layer = Loc_Layer(in_channel, anchor, cfg['stride'][i], incep_layer=incep_loc, in_wid=128)
             self.loc_layers.append(loc_layer)
             # Create Confidence Layer
             if self.connect_loc_to_conf:
-                conf_layer = omth_blocks.InceptionBlock(in_channel, stride=[[1, 1, 1], [1, 1, 1], [1, 1, 1], [1, 1]],
-                                                        kernel_sizes=[[[7, 1], 3, 1], [[5, 1], 3, 1], [[3, 1], 3, 1], [3, 1]],
-                                                        filters=[[128, 128, 64], [128, 128, 64], [128, 128, 64], [192, 64]],
-                                                        padding=[[[3, 0], 1, 0], [[2, 0], 1, 0], [[1, 0], 1, 0], [1, 0]],
-                                                        batch_norm=None, inner_maxout=None)
-                #conf_layer = omth_blocks.conv_block(512, filters=[in_channel, int(in_channel / 2)],
-                                                    #kernel_sizes=[1, 3], stride=[1, 1], padding=[0, 1], activation=None)
+                if incep_conf:
+                    conf_layer = omth_blocks.InceptionBlock(in_channel, stride=[[1, 1, 1], [1, 1, 1], [1, 1, 1], [1, 1]],
+                                                            kernel_sizes=[[[7, 1], 3, 1], [[5, 1], 3, 1], [[3, 1], 3, 1], [3, 1]],
+                                                            filters=[[128, 128, 64], [128, 128, 64], [128, 128, 64], [192, 64]],
+                                                            padding=[[[3, 0], 1, 0], [[2, 0], 1, 0], [[1, 0], 1, 0], [1, 0]],
+                                                            batch_norm=None, inner_maxout=None)
+                else:
+                    conf_layer = omth_blocks.conv_block(512, filters=[in_channel, int(in_channel / 2)],
+                                                        kernel_sizes=[1, 3], stride=[1, 1], padding=[0, 1], activation=None)
                 conf_layer.apply(init.init_cnn)
                 self.conf_layers.append(conf_layer)
                 # In this layer, the output from loc_layer will be concatenated to the conf layer
@@ -181,6 +183,7 @@ class SSD(nn.Module):
                 conf_concat.apply(init.init_cnn)
                 self.conf_concate.append(conf_concat)
             else:
+                print("incep_conf is turned off due to connect_loc_to_conf is False")
                 conf_layer = omth_blocks.conv_block(in_channel, filters=[in_channel, int(in_channel / 2), anchor * 2],
                                                     kernel_sizes=[1, 3, 3], stride=[1, 1, cfg['stride'][i]],
                                                     padding=[0, 1, 1], activation=None)
@@ -245,8 +248,8 @@ class SSD(nn.Module):
                 if len(conv_output) == len(self.output_list):
                     # Doesn't need to compute further convolutional output
                     break
-        #if not self.fix_size:
-        self.prior = self.create_prior(feature_map_size=feature_shape, input_size=input_size).cuda()
+        if not self.fix_size:
+            self.prior = self.create_prior(feature_map_size=feature_shape, input_size=input_size).cuda()
         for i, x in enumerate(conv_output):
             loc = self.loc_layers[i](x)
             locations.append(loc.permute(0, 2, 3, 1).contiguous().view(loc.size(0), -1, 4))

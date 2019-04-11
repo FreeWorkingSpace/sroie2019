@@ -1,4 +1,4 @@
-import os, torch
+import os, torch, warnings
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
@@ -6,17 +6,26 @@ import omni_torch.visualize.basic as vb
 from matplotlib import gridspec
 from researches.ocr.textbox.tb_utils import *
 
-def print_box(red_boxes, shape=0, green_boxes=(), blue_boxes=(),
-              img=None, idx=None, title=None, step_by_step_r=False,
-              step_by_step_g=False, step_by_step_b=False):
-    """
-    Print three kind of boxes in different color on a canvas of shape: shape
-    :param red_boxes:
-    :param green_boxes:
-    :param blue_boxes:
-    :param shape:
-    :return:
-    """
+def print_box(red_boxes, shape=0, green_boxes=(), blue_boxes=(), img=None, idx=None,
+              title=None, step_by_step_r=False, step_by_step_g=False, step_by_step_b=False,
+              name_prefix="", save_dir=None):
+    # Generate the save folder and image save name
+    if idx is not None:
+        img_name = name_prefix + "_sample_%s_pred" % (idx)
+    else:
+        img_name = name_prefix
+    if save_dir is None:
+        save_dir = os.path.expanduser("~/Pictures")
+    else:
+        save_dir = os.path.expanduser(save_dir)
+    if not os.path.exists(save_dir):
+        warnings.warn(
+            "The save_dir you specified (%s) does not exist, saving results under ~/Pictures"%(save_dir)
+        )
+        save_dir = os.path.expanduser("~/Pictures")
+    img_path = os.path.join(save_dir, img_name)
+
+    # Figure out the shape
     if type(shape) is tuple:
         h, w = shape[0], shape[1]
     else:
@@ -27,6 +36,8 @@ def print_box(red_boxes, shape=0, green_boxes=(), blue_boxes=(),
     else:
         img = img.astype(np.uint8)
         h, w, c = img.shape
+
+    # Perform Visualization of boundbox
     fig, ax = plt.subplots(figsize=(round(w / 100), round(h / 100)))
     ax.imshow(img)
     step = 0
@@ -37,29 +48,26 @@ def print_box(red_boxes, shape=0, green_boxes=(), blue_boxes=(),
         ax.add_patch(rect)
         if step_by_step_r:
             step += 1
-            plt.savefig(os.path.expanduser("~/Pictures/step_%s.jpg"%(str(step).zfill(4))))
+            plt.savefig(img_path + "_red_step_%s.jpg"%(str(step).zfill(4)))
     for box in green_boxes:
         x1, y1, x2, y2 = coord_to_rect(box, h, w)
         rect = patches.Rectangle((x1, y1), x2, y2, linewidth=2,
-                                       edgecolor='g', facecolor='none', alpha=0.5)
+                                       edgecolor='g', facecolor='none', alpha=0.4)
         ax.add_patch(rect)
         if step_by_step_g:
             step += 1
-            plt.savefig(os.path.expanduser("~/Pictures/step_%s.jpg" % (str(step).zfill(4))))
+            plt.savefig(img_path + "_green_step_%s.jpg" % (str(step).zfill(4)))
     for box in blue_boxes:
         x1, y1, x2, y2 = coord_to_rect(box, h, w)
         rect = patches.Rectangle((x1, y1), x2, y2, linewidth=2,
-                                       edgecolor='b', facecolor='none', alpha=0.5)
+                                       edgecolor='b', facecolor='none', alpha=0.4)
         ax.add_patch(rect)
         if step_by_step_b:
             step += 1
-            plt.savefig(os.path.expanduser("~/Pictures/step_%s.jpg" % (str(step).zfill(4))))
+            plt.savefig(img_path + "_blue_step_%s.jpg" % (str(step).zfill(4)))
     if title:
         plt.title(title)
-    if idx is not None:
-        plt.savefig(os.path.expanduser("~/Pictures/epoch_%s_pred.jpg" % (idx)))
-    else:
-        plt.savefig(os.path.expanduser("~/Pictures/tmp.jpg"))
+    plt.savefig(os.path.join(save_dir, img_name + ".jpg"))
     plt.close()
     
 def visualize_overlaps(cfg, target, label, prior, ratio):

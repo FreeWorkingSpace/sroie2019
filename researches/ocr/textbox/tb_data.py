@@ -85,6 +85,7 @@ def detection_collector(batch):
 
 def fetch_detection_data(args, sources, auxiliary_info, batch_size, batch_size_val=None,
                          shuffle=True, split_val=0.0, k_fold=1, pre_process=None, aug=None):
+    args.loading_threads = round(args.loading_threads * torch.cuda.device_count())
     if batch_size_val is None:
         batch_size_val = batch_size
     dataset = []
@@ -104,8 +105,7 @@ def fetch_detection_data(args, sources, auxiliary_info, batch_size, batch_size_v
             return util.split_train_val_dataset(args, dataset, batch_size, batch_size_val,
                                                 split_val, collate_fn=detection_collector)
         else:
-            kwargs = {'num_workers': args.loading_threads, 'pin_memory': True} \
-                if torch.cuda.is_available() else {}
+            kwargs = {'num_workers': args.loading_threads, 'pin_memory': True}
             train_set = DataLoader(ConcatDataset(dataset), batch_size=batch_size,
                                    shuffle=shuffle, collate_fn=detection_collector, **kwargs)
             return [(train_set, None)]
