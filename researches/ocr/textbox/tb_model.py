@@ -27,11 +27,11 @@ cfg = {
     # 'box_height': [[10, 16], [26], [36]],
     # 'box_height': [[16], [26], []],
     'box_height': [[14], [24], [38]],
-    'box_ratios': [[2, 4, 7, 11, 16, 20, 26], [1, 2, 5, 9, 14, 20], [1, 2, 5, 9, 12]],
+    'box_ratios': [[2, 4, 7, 11, 15, 20, 26], [1, 2, 5, 9, 13, 16, 18, 20], [1, 2, 5, 8, 10, 12]],
     # If big_box is True, then box_height_large and box_ratios_large will be used
     'big_box': True,
     'box_height_large': [[18], [30], [46]],
-    'box_ratios_large': [[1, 2, 4, 7, 11, 15, 20], [0.5, 1, 3, 6, 10, 15], [1, 2, 4, 7, 11]],
+    'box_ratios_large': [[1, 2, 4, 7, 11, 15, 20], [0.5, 1, 3, 6, 9, 11, 13, 15], [1, 2, 4, 7, 9, 11]],
     # You can increase the stride when feature_map_size is large
     # especially at swallow conv layers, so as not to create lots of prior boxes
     'stride': [1, 1, 1],

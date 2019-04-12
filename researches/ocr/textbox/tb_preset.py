@@ -3,13 +3,13 @@ def GeneralPattern(args):
     # this will create a folder named "_text_detection" under "~/Pictures/dataset/ocr"
     args.code_name = "_text_detection"
     # Set it to True to make experiment result reproducible
-    args.deterministic_train = True
+    args.deterministic_train = False
     # Random seed for everything
     # If deterministic_train is disabled, then it will have no meaning
     args.seed = 1
     # Training Hyperparameter
     args.learning_rate = 1e-4
-    args.batch_size_per_gpu = 7
+    args.batch_size_per_gpu = 6
     args.loading_threads = 2
     args.img_channel = 3
     args.epoch_num = 2000

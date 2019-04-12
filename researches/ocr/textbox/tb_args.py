@@ -2,11 +2,12 @@ import argparse
 
 def initialize():
     parser = argparse.ArgumentParser(description='Process some integers.')
-    parser.add_argument("--batch_per_gpu", type=int, default=8)
-    parser.add_argument("--loading_thread_per_gpu", type=int, default=2)
+    parser.add_argument("--batch_per_gpu", type=int)
+    parser.add_argument("--loading_thread_per_gpu", type=int)
 
 
     #  --------------------------Model Architecture-------------------------------
+
 
     # -------------------------------Training------------------------------------
     parser.add_argument("--gpu_id", type=str, default="0",

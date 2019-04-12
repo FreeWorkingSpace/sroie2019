@@ -1,17 +1,21 @@
 from imgaug import augmenters
 
-def aug_sroie():
+def aug_sroie(stretch_x=0, stretch_y=0, bg_color=255):
     aug_list = []
     stage_0, stage_1, stage_2, stage_3 = 1536, 2048, 768, 512
     # Pad the height to stage_0
-    aug_list.append(augmenters.PadToFixedSize(width=1, height=stage_0, pad_cval=255))
+    aug_list.append(augmenters.PadToFixedSize(width=1, height=stage_0, pad_cval=bg_color))
     # Resize its height to stage_1, note that stage_0 is smaller than stage_1
     # so that the font size could be increased for most cases.
     aug_list.append(augmenters.Resize(size={"height": stage_1, "width": "keep-aspect-ratio"}))
+    # increase the aspect ratio
+    aug_list.append(augmenters.Affine(
+        scale={"x": (1 - stretch_y, 1.0 + stretch_x), "y": (1.0 - stretch_x, 1 + stretch_y)}, cval=bg_color)
+    )
     # Crop a stage_2 x stage_2 area
     aug_list.append(augmenters.CropToFixedSize(width=stage_2, height=stage_2))
     # In case the width is not enough, pad it to stage_2 x stage_2
-    aug_list.append(augmenters.PadToFixedSize(width=stage_2, height=stage_2, pad_cval=255))
+    aug_list.append(augmenters.PadToFixedSize(width=stage_2, height=stage_2, pad_cval=bg_color))
     # Resize to stage_3 x stage_3
     aug_list.append(augmenters.Resize(size={"height": stage_3, "width": stage_3}))
     # Perform Flip
