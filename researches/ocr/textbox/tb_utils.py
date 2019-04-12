@@ -30,65 +30,24 @@ def center_size(prior, img_ratio):
     return boxes * ratio_coefficiency
 
 
-def box_jaccard(box_a, box_b):
-    def calibration(x):
-        """
-        when x is 0 then y is: 0.49768748545490993
-        when x is 0.5 then y is: 0.9113706829705495
-        when x is 1 then y is: 1.1053614272370262
-        when x is 5 then y is: 1.5603316608172944
-        when x is 20 then y is: 1.9203769145103649
-        when x is 50 then y is: 2.1389601886864544
-        """
-        mul = 0.7
-        trans = 1
-        y = torch.pow(x, 1/5)
-        #y = torch.sqrt(torch.tanh(mul * (x + trans)) + torch.log(mul * (x + trans)))
-        return y
-    A = box_a.size(0)
-    B = box_b.size(0)
-    # Calculate intersect and union on x direction
-    x1_min = torch.min(box_a[:, 0:1].unsqueeze(1).expand(A, B, 1),
-                       box_b[:, 0:1].unsqueeze(0).expand(A, B, 1))
-    x1_max = torch.max(box_a[:, 0:1].unsqueeze(1).expand(A, B, 1),
-                       box_b[:, 0:1].unsqueeze(0).expand(A, B, 1))
-    x2_min = torch.min(box_a[:, 2:3].unsqueeze(1).expand(A, B, 1),
-                       box_b[:, 2:3].unsqueeze(0).expand(A, B, 1))
-    x2_max = torch.max(box_a[:, 2:3].unsqueeze(1).expand(A, B, 1),
-                       box_b[:, 2:3].unsqueeze(0).expand(A, B, 1))
-    inter_x = torch.clamp((x2_min - x1_max), min=0).squeeze(-1)
-    union_x = torch.clamp((x2_max - x1_min), min=0).squeeze(-1)
-    j_x = (inter_x / union_x)
-
-    # Calculate intersect and union on y direction
-    y1_min = torch.min(box_a[:, 1:2].unsqueeze(1).expand(A, B, 1),
-                       box_b[:, 1:2].unsqueeze(0).expand(A, B, 1))
-    y1_max = torch.max(box_a[:, 1:2].unsqueeze(1).expand(A, B, 1),
-                       box_b[:, 1:2].unsqueeze(0).expand(A, B, 1))
-    y2_min = torch.min(box_a[:, 3:4].unsqueeze(1).expand(A, B, 1),
-                       box_b[:, 3:4].unsqueeze(0).expand(A, B, 1))
-    y2_max = torch.max(box_a[:, 3:4].unsqueeze(1).expand(A, B, 1),
-                       box_b[:, 3:4].unsqueeze(0).expand(A, B, 1))
-    inter_y = torch.clamp((y2_min - y1_max), min=0).squeeze(-1)
-    union_y = torch.clamp((y2_max - y1_min), min=0).squeeze(-1)
-    j_y = (inter_y / union_y)
-
-    # Calculated intersected box ratio
-    inter_r = inter_x / inter_y
-    inter_r[inter_r != inter_r] = 0
-    inter_r[inter_r == float("Inf")] = 0
-    idx = inter_r == 0
-    inter_r = calibration(inter_r)
-    # enhance box when box is wide
-    #inter_r = F.softmax(torch.stack([inter_r, 1/inter_r], 0), dim=0)
-    # supress box when box is wide
-    inter_r = F.softmax(torch.stack([1/inter_r, inter_r], 0), dim=0)
-
-    j = torch.stack([j_x, j_y], 0)
-
-    jac = torch.sum(inter_r * j, dim=0)
-    jac[idx] = 0
-    return jac
+def box_jaccard(prior_a, prior_b):
+    # step 1: calculate the distance (L-2) between the center coordinate
+    center_a = prior_a[:, :2].unsqueeze(0).repeat(prior_b.size(0), 1, 1)
+    center_b = prior_b[:, :2].unsqueeze(1).repeat(1, prior_a.size(0), 1)
+    coord_a = prior_a[:, 2:].unsqueeze(0).repeat(prior_b.size(0), 1, 1)
+    coord_b = prior_b[:, 2:].unsqueeze(1).repeat(1, prior_a.size(0), 1)
+    center_dis = torch.sqrt(torch.sum((center_a - center_b)**2, dim=2) + 1e-5)
+    # step 2: calculate the shape distance between the shape coordinate
+    #    1. when distance between center is close, make the score higher, the more closer the much higher
+    center_dis = 1 / center_dis
+    #    2. compare the aspect ratio, the higher the better, aspect_ratio = width / height
+    aspt = coord_a[:, :, 0] / coord_a[:, :, 1] / coord_b[:, :, 0] * coord_b[:, :, 1]
+    #aspt = 1 / (aspt + 1 / aspt)
+    #    3. compare the size, the higher the better
+    size = coord_a[:, :, 0] * coord_a[:, :, 1] / coord_b[:, :, 0] / coord_b[:, :, 1]
+    #size = 1 / (size + 1 / size)
+    box_jcd = center_dis / aspt / size
+    return box_jcd
 
 
 def get_box_size(box):
@@ -155,10 +114,13 @@ def match(cfg, threshold, truths, priors, variances, labels, loc_t, conf_t, idx,
         t = x + 2 / x
         y = 2 / (torch.sqrt(torch.tanh(mul * (t + trans)) + (mul * (t + trans)))) + x / 150
         return y
+
+    overlaps = box_jaccard(center_size(truths, 1), priors)
     if cfg['clip']:
         overlaps = jaccard(truths, point_form(priors, ratios).clamp_(max=1, min=0))
     else:
         overlaps = jaccard(truths, point_form(priors, ratios))
+    overlaps = box_jaccard(center_size(truths, 1), priors)
     prior_ratios = calibrate(priors[:, 2] / priors[:, 3]).unsqueeze(0).repeat(truths.size(0), 1)
     overlaps = overlaps * prior_ratios
 
