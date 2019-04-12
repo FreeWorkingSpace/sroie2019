@@ -277,7 +277,7 @@ class Loc_Layer(nn.Module):
                                                      stride=[1, 1], padding=[3, 0], dilation=[3, 1], batch_norm=batch_norm))
         if incep_loc:
             self.loc_layer.append(omth_blocks.InceptionBlock(
-                512, filters=[[128, 128, in_wid], [128, 128, in_wid], [128, 128, in_wid], [192, in_wid]],
+                in_channel, filters=[[128, 128, in_wid], [128, 128, in_wid], [128, 128, in_wid], [192, in_wid]],
                 kernel_sizes=[[[7, 1], 3, 1], [[5, 1], 3, 1], [[3, 1], 3, 1], [3, 1]],
                 stride=[[1, 1, 1], [1, 1, 1], [1, 1, 1], [1, 1]],
                 padding=[[[3, 0], 1, 0], [[2, 0], 1, 0], [[1, 0], 1, 0], [1, 0]],
@@ -296,10 +296,15 @@ class Loc_Layer(nn.Module):
         return x
     
 class Conf_Layer(nn.Module):
-    def __init__(self, in_channel, anchor, stride, incep_conf=False, cancat_loc=True, in_wid=128):
+    def __init__(self, in_channel, anchor, stride, incep_conf=False, cancat_loc=True,
+                 in_wid=128, batch_norm=nn.BatchNorm2d):
         super().__init__()
         self.cancat_loc = cancat_loc
-
+        self.conf_layer = nn.ModuleList([])
+        self.conf_layer.append(omth_blocks.conv_block(
+            in_channel, [in_channel, in_channel], kernel_sizes=[3, 1], stride=[1, 1],
+            padding=[3, 0], dilation=[3, 1], batch_norm=batch_norm)
+        )
         if self.connect_loc_to_conf:
             if incep_conf:
                 conf_layer = omth_blocks.InceptionBlock(in_channel, stride=[[1, 1, 1], [1, 1, 1], [1, 1, 1], [1, 1]],
