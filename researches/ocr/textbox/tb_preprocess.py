@@ -74,8 +74,8 @@ def detect_angle(img):
     return angle * -1
 
 
-def eatimate_angle(signal, args, path, seed, size, device=None):
-    transform_det = {}
+def estimate_angle(signal, args, path, seed, size, device=None):
+    transform_det = {"rotation": 0}
     signal, _ = clahe_inv(signal, args, path, seed, size)
     original_size = signal.shape
     # Resize to small image for detect rotation angle
@@ -84,7 +84,7 @@ def eatimate_angle(signal, args, path, seed, size, device=None):
     angle = detect_angle(signal)
     if angle is not None and abs(angle) * 90 > 1:
         print("angle: %s"%angle)
-        transform_det.update({"rotation": angle * 90})
+        transform_det["rotation"] = angle * 90
     return signal, transform_det
 
 
