@@ -20,23 +20,34 @@ args = util.get_args(preset.PRESET)
 if not torch.cuda.is_available():
     raise RuntimeError("Need cuda devices")
 dt = datetime.datetime.now().strftime("%Y-%m-%d_%H:%M")
+result_dir = os.path.join(args.path, args.code_name, "result")
+if not os.path.exists(result_dir):
+    os.makedirs(result_dir)
+
+
+def augment_back(transform_det, height_ori, width_ori, v_crop, h_crop):
+    aug_list = []
+    v_crop = round(v_crop)
+    h_crop = round(h_crop)
+    # counteract pading
+    aug_list.append(
+        # top, right, bottom, left
+        augmenters.Crop(px=(v_crop, h_crop, v_crop, h_crop))
+    )
+    # counteract resizing
+    aug_list.append(
+        augmenters.Resize(size={"height": height_ori, "width": width_ori})
+    )
+    # counteract rotation, if exist
+    if "rotation" in transform_det:
+        aug_list.append(
+            augmenters.Affine(rotate=-transform_det["rotation"], cval=args.aug_bg_color),
+        )
+    aug = augmenters.Sequential(aug_list, random_order=False)
+    return aug
 
 
 def test_rotation():
-    def return_aug(transform_det, height_ori, width_ori, height, width):
-        aug_list = []
-        aug_list.append(
-            augmenters.Resize(size={"height": height, "width": width})
-        )
-        if "rotation" in transform_det:
-            aug_list.append(
-                augmenters.Affine(rotate=-transform_det["rotation"], cval=args.aug_bg_color, fit_output=True),
-            )
-        aug = augmenters.Sequential(aug_list, random_order=False)
-        return aug
-    import imgaug
-    from imgaug import augmenters
-
     # Load Model
     net = model.SSD(cfg, connect_loc_to_conf=True, fix_size=False,
                     incep_conf=True, incep_loc=True)
@@ -47,10 +58,12 @@ def test_rotation():
         net_dict[key[7:]] = weight_dict[key]
     net.load_state_dict(net_dict)
     net.eval()
-
+    
+    # Enumerate test folder
     img_list = glob.glob(os.path.expanduser("~/Pictures/dataset/ocr/SROIE2019_test/*.jpg"))
     for i, img_file in enumerate(sorted(img_list)):
-        # Get img and bbox infomation from local file
+        start = time.time()
+        name = img_file[img_file.rfind("/") + 1 : -4]
         img = cv2.imread(img_file)
         height_ori, width_ori = img.shape[0], img.shape[1]
 
@@ -62,52 +75,61 @@ def test_rotation():
         else:
             rot_aug = None
 
-        # Augment img and bbox, even if rotation exists, we only rotate img not bbox
+        # Perform Augmentation
         if rot_aug:
             rot_aug = augmenters.Sequential(
-                augmenters.Affine(rotate=transform_det["rotation"], cval=args.aug_bg_color),
-                random_order=False)
-            #rot_bbox = rot_aug.augment_bounding_boxes([bbox])[0]
+                augmenters.Affine(rotate=transform_det["rotation"], cval=args.aug_bg_color))
             image = rot_aug.augment_image(img)
         else:
             image = img
-        height, width = image.shape[0], image.shape[1]
-        if height != height_ori or width != width_ori:
-            print("wrong rotation method")
+        # Resize the longer side to a certain length
         square = 1536
-        resize_aug =augmenters.Sequential([
-            augmenters.Resize(size={"height": square, "width": "keep-aspect-ratio"}),
-            augmenters.PadToFixedSize(width=square, height=square, pad_cval=255),
-        ])
+        if height_ori >= width_ori:
+            resize_aug =augmenters.Sequential([
+                augmenters.Resize(size={"height": square, "width": "keep-aspect-ratio"})])
+        else:
+            resize_aug = augmenters.Sequential([
+                augmenters.Resize(size={"height": "keep-aspect-ratio", "width": square})])
         resize_aug = resize_aug.to_deterministic()
         image = resize_aug.augment_image(image)
-        # Get the final size of resized input image
-        height_final, width_final = image.shape[0], image.shape[1]
-        # Generate prior boxes according to the input image size
-        #cfg["feature_map_sizes"] = [[height_final/8, width_final/8], [height_final/16, width_final/16],
-        #                             [height_final/32, width_final/32]]
-        #net.prior = net.create_prior(input_size=(height_final, width_final)).cuda()
-        # Collect bboxes inside the image
-        #coord = extract_boxes(bbox, height_final, width_final, box_label)
-        #rot_coord = extract_boxes(rot_bbox, height_final, width_final, box_label)
+        h_re, w_re = image.shape[0], image.shape[1]
+        # Pad the image into a square image
+        pad_aug = augmenters.Sequential(
+            augmenters.PadToFixedSize(width=square, height=square, pad_cval=255, position="center")
+        )
+        pad_aug = pad_aug.to_deterministic()
+        image = pad_aug.augment_image(image)
+        h_final, w_final= image.shape[0], image.shape[1]
 
         # Prepare image tensor and test
-        image = torch.Tensor(util.normalize_image(args, image)).unsqueeze(0)
-        image = image.permute(0, 3, 1, 2).cuda()
+        image_t = torch.Tensor(util.normalize_image(args, image)).unsqueeze(0)
+        image_t = image_t.permute(0, 3, 1, 2).cuda()
         #visualize_bbox(args, cfg, image, [torch.Tensor(rot_coord).cuda()], net.prior, height_final/width_final)
-        out = net(image, is_train=False)
+        out = net(image_t, is_train=False)
 
         # Extract the predicted bboxes
         idx = out.data[0, 1, :, 0] >= 0.1
         text_boxes = out.data[0, 1, idx, 1:]
         pred = [[float(coor) for coor in area] for area in text_boxes]
-        #BBox = [imgaug.imgaug.BoundingBox(box[0], box[1], box[2], box[3])
-                #for box in pred]
-        #BBoxes = imgaug.imgaug.BoundingBoxesOnImage(BBox, shape=(square, square))
-        #bbox = aug_seq.augment_bounding_boxes([BBoxes])[0]
-        print_box(blue_boxes=pred, idx=i, img=vb.plot_tensor(args, image, margin=0),
-                  save_dir=args.val_log)
-        print(i)
+        BBox = [imgaug.imgaug.BoundingBox(box[0] * w_final, box[1] * h_final, box[2] * w_final, box[3] * h_final)
+                for box in pred]
+        BBoxes = imgaug.imgaug.BoundingBoxesOnImage(BBox, shape=image.shape)
+        return_aug = augment_back(transform_det, height_ori, width_ori, (h_final - h_re) / 2, (w_final - w_re) / 2)
+        return_aug = return_aug.to_deterministic()
+        img_ori = return_aug.augment_image(image)
+        bbox = return_aug.augment_bounding_boxes([BBoxes])[0]
+        #print_box(blue_boxes=pred, idx=i, img=vb.plot_tensor(args, image_t, margin=0),
+                  #save_dir=args.val_log)
+        
+        f = open(os.path.join(result_dir, name + ".txt"), "w")
+        for box in bbox.bounding_boxes:
+            x1, y1, x2, y2 = int(round(box.x1)), int(round(box.y1)), int(round(box.x2)), int(round(box.y2))
+            # 4-point to 8-point: x1, y1, x2, y1, x2, y2, x1, y2
+            f.write("%d, %d, %d, %d, %d, %d, %d, %d\n"%(x1, y1, x2, y1, x2, y2, x1, y2))
+            cv2.rectangle(img, (x1, y1), (x2, y2), (255, 105, 65), 2)
+        cv2.imwrite(os.path.join(args.val_log, name + ".jpg"), img)
+        f.close()
+        print("%d th image cost %.2f seconds"%(i, time.time() - start))
         """
         scale = torch.Tensor([h, w, h, w]).unsqueeze(0).repeat(text_boxes.size(0), 1)
         text_boxes = text_boxes.cpu() * scale
@@ -122,7 +144,6 @@ def test_rotation():
         bbox_aug = crop_aug.augment_bounding_boxes(bbox)
         """
 
-        #print_box(pred, img=img, idx=i)
 
 if __name__ == "__main__":
     with torch.no_grad():
