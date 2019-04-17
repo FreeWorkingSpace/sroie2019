@@ -115,12 +115,12 @@ def match(cfg, threshold, truths, priors, variances, labels, loc_t, conf_t, idx,
         y = 2 / (torch.sqrt(torch.tanh(mul * (t + trans)) + (mul * (t + trans)))) + x / 150
         return y
 
-    overlaps = box_jaccard(center_size(truths, 1), priors)
+    #overlaps = box_jaccard(center_size(truths, 1), priors)
     if cfg['clip']:
         overlaps = jaccard(truths, point_form(priors, ratios).clamp_(max=1, min=0))
     else:
         overlaps = jaccard(truths, point_form(priors, ratios))
-    overlaps = box_jaccard(center_size(truths, 1), priors)
+    #overlaps = box_jaccard(center_size(truths, 1), priors)
     prior_ratios = calibrate(priors[:, 2] / priors[:, 3]).unsqueeze(0).repeat(truths.size(0), 1)
     overlaps = overlaps * prior_ratios
 

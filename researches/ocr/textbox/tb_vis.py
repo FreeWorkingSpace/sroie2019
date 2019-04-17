@@ -6,7 +6,7 @@ import omni_torch.visualize.basic as vb
 from matplotlib import gridspec
 from researches.ocr.textbox.tb_utils import *
 
-def print_box(red_boxes, shape=0, green_boxes=(), blue_boxes=(), img=None, idx=None,
+def print_box(red_boxes=(), shape=0, green_boxes=(), blue_boxes=(), img=None, idx=None,
               title=None, step_by_step_r=False, step_by_step_g=False, step_by_step_b=False,
               name_prefix="", save_dir=None):
     # Generate the save folder and image save name

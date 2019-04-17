@@ -143,7 +143,7 @@ def measure(pred_boxes, gt_boxes):
 
 def main():
     if args.fix_size:
-        aug = aug_sroie(stretch_x=0.25, stretch_y=0.1)
+        aug = aug_sroie()
         #aug_test = aug_sroie()
     else:
         aug = aug_sroie_dynamic_2()
