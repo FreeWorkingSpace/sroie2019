@@ -15,6 +15,7 @@ from researches.ocr.textbox.tb_vis import visualize_bbox, print_box
 from omni_torch.networks.optimizer.adabound import AdaBound
 import omni_torch.visualize.basic as vb
 
+
 TMPJPG = os.path.expanduser("~/Pictures/tmp.jpg")
 cfg = model.cfg
 args = util.get_args(preset.PRESET)
@@ -158,7 +159,7 @@ def main():
         print("\n =============== Cross Validation: %s/%s ================ " %
               (idx + 1, len(datasets)))
         net = model.SSD(cfg, connect_loc_to_conf=True, fix_size=args.fix_size,
-                        incep_conf=True, incep_loc=True)
+                        incep_conf=True, incep_loc=True, nms_thres=0.4)
         net = torch.nn.DataParallel(net)
         # Input dimension of bbox is different in each step
         torch.backends.cudnn.benchmark = True

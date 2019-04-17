@@ -50,7 +50,7 @@ def augment_back(transform_det, height_ori, width_ori, v_crop, h_crop):
 def test_rotation():
     # Load Model
     net = model.SSD(cfg, connect_loc_to_conf=True, fix_size=False,
-                    incep_conf=True, incep_loc=True)
+                    incep_conf=True, incep_loc=True, nms_thres=0.05)
     net = net.cuda()
     net_dict = net.state_dict()
     weight_dict = util.load_latest_model(args, net, prefix="cv_1", return_state_dict=True)
@@ -125,24 +125,11 @@ def test_rotation():
         for box in bbox.bounding_boxes:
             x1, y1, x2, y2 = int(round(box.x1)), int(round(box.y1)), int(round(box.x2)), int(round(box.y2))
             # 4-point to 8-point: x1, y1, x2, y1, x2, y2, x1, y2
-            f.write("%d, %d, %d, %d, %d, %d, %d, %d\n"%(x1, y1, x2, y1, x2, y2, x1, y2))
+            f.write("%d,%d,%d,%d,%d,%d,%d,%d\n"%(x1, y1, x2, y1, x2, y2, x1, y2))
             cv2.rectangle(img, (x1, y1), (x2, y2), (255, 105, 65), 2)
         cv2.imwrite(os.path.join(args.val_log, name + ".jpg"), img)
         f.close()
         print("%d th image cost %.2f seconds"%(i, time.time() - start))
-        """
-        scale = torch.Tensor([h, w, h, w]).unsqueeze(0).repeat(text_boxes.size(0), 1)
-        text_boxes = text_boxes.cpu() * scale
-
-        r_aug = return_aug(transform_det, height_ori, width_ori, height, width)
-        r_aug = r_aug.to_deterministic()
-        image = r_aug.augment_image(image)
-        bbox = r_aug.augment_bounding_boxes([bbox])[0]
-
-        pred_bbox = [imgaug.imgaug.BoundingBox([float(coor) for coor in area]) for area in text_boxes]
-        BBox = imgaug.imgaug.BoundingBoxesOnImage(BBox, shape=img.shape)
-        bbox_aug = crop_aug.augment_bounding_boxes(bbox)
-        """
 
 
 if __name__ == "__main__":
