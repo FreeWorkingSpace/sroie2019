@@ -42,10 +42,10 @@ def box_jaccard(prior_a, prior_b):
     center_dis = 1 / center_dis
     #    2. compare the aspect ratio, the higher the better, aspect_ratio = width / height
     aspt = coord_a[:, :, 0] / coord_a[:, :, 1] / coord_b[:, :, 0] * coord_b[:, :, 1]
-    #aspt = 1 / (aspt + 1 / aspt)
+    aspt = 1 / (aspt + 1 / aspt)
     #    3. compare the size, the higher the better
     size = coord_a[:, :, 0] * coord_a[:, :, 1] / coord_b[:, :, 0] / coord_b[:, :, 1]
-    #size = 1 / (size + 1 / size)
+    size = 1 / (size + 1 / size)
     box_jcd = center_dis / aspt / size
     return box_jcd
 
@@ -115,7 +115,7 @@ def match(cfg, threshold, truths, priors, variances, labels, loc_t, conf_t, idx,
         y = 2 / (torch.sqrt(torch.tanh(mul * (t + trans)) + (mul * (t + trans)))) + x / 150
         return y
 
-    #overlaps = box_jaccard(center_size(truths, 1), priors)
+    overlaps = box_jaccard(center_size(truths, 1), priors)
     if cfg['clip']:
         overlaps = jaccard(truths, point_form(priors, ratios).clamp_(max=1, min=0))
     else:
