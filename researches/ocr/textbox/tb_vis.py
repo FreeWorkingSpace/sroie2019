@@ -8,8 +8,10 @@ from researches.ocr.textbox.tb_utils import *
 
 def print_box(red_boxes=(), shape=0, green_boxes=(), blue_boxes=(), img=None, idx=None,
               title=None, step_by_step_r=False, step_by_step_g=False, step_by_step_b=False,
-              name_prefix="", save_dir=None):
+              name_prefix=None, save_dir=None):
     # Generate the save folder and image save name
+    if not name_prefix:
+        name_prefix = "tmp"
     if idx is not None:
         img_name = name_prefix + "_sample_%s_pred" % (idx)
     else:
