@@ -36,7 +36,7 @@ cfg = {
     # especially at swallow conv layers, so as not to create lots of prior boxes
     'stride': [1, 1, 1],
     # Input depth for location and confidence layers
-    'loc_and_conf': [512, 512, 512],
+    'loc_and_conf': [256, 384, 384],
     # The hyperparameter to decide the Loss
     'variance': [0.1, 0.2],
     'var_updater': 1,
@@ -110,7 +110,7 @@ class Detect(Function):
 
 class SSD(nn.Module):
     def __init__(self, cfg, in_channel=512, batch_norm=nn.BatchNorm2d, fix_size=True,
-                 connect_loc_to_conf=False, incep_loc=False, incep_conf=False):
+                 connect_loc_to_conf=False, incep_loc=False, incep_conf=False, nms_thres=0.2):
         super().__init__()
         self.cfg = cfg
         self.num_classes = cfg['num_classes']
@@ -121,7 +121,7 @@ class SSD(nn.Module):
         self.conf_concate = nn.ModuleList([])
         self.conv_module_name = []
         self.softmax = nn.Softmax(dim=-1)
-        self.detect = Detect(self.num_classes, 0, 200, 0.01, 0.45)
+        self.detect = Detect(self.num_classes, 0, 1500, 0.01, nms_thres)
         self.connect_loc_to_conf = connect_loc_to_conf
         self.fix_size = fix_size
         if fix_size:
@@ -133,28 +133,45 @@ class SSD(nn.Module):
         # Replace the maxout with ceil in vanilla vgg16 net
         ceil_maxout = nn.MaxPool2d(kernel_size=2, stride=2, padding=0, dilation=1, ceil_mode=True)
         net = [ceil_maxout if type(n) is nn.MaxPool2d else n for n in net]
-
+        
         # Basic VGG Layers
         self.conv_module_name.append("conv_1")
         self.conv_module.append(nn.Sequential(*net[:6]))
         self.conv_module_name.append("conv_2")
-        self.conv_module.append(nn.Sequential(*net[6:13]))
+        block = omth_blocks.conv_block(64, filters=[64, 128],kernel_sizes=[3, 3], stride=[1, 1],
+                                       padding=[1, 1],batch_norm=batch_norm)
+        block.add_module("2", ceil_maxout)
+        self.conv_module.append(block)
+        #self.conv_module.append(nn.Sequential(*net[6:13]))
         self.conv_module_name.append("conv_3")
-        self.conv_module.append(nn.Sequential(*net[13:23]))
+        block = omth_blocks.conv_block(128, filters=[128, 128], kernel_sizes=[3, 1], stride=[1, 1],
+                                       padding=[1, 0], batch_norm=batch_norm)
+        block.add_module("3", ceil_maxout)
+        self.conv_module.append(block)
+        #self.conv_module.append(nn.Sequential(*net[13:23]))
         self.conv_module_name.append("conv_4")
-        self.conv_module.append(nn.Sequential(*net[23:33]))
+        block = omth_blocks.conv_block(128, filters=[256, 256], kernel_sizes=[3, 1], stride=[1, 1],
+                                       padding=[1, 0], batch_norm=batch_norm)
+        block.add_module("4", ceil_maxout)
+        self.conv_module.append(block)
+        #self.conv_module.append(nn.Sequential(*net[23:33]))
         self.conv_module_name.append("conv_5")
-        self.conv_module.append(nn.Sequential(*net[33:43]))
+        block = omth_blocks.conv_block(256, filters=[384, 384], kernel_sizes=[3, 1], stride=[1, 1],
+                                       padding=[1, 0], batch_norm=batch_norm)
+        block.add_module("5", ceil_maxout)
+        self.conv_module.append(block)
+        #self.conv_module.append(nn.Sequential(*net[33:43]))
 
         # Extra Layers
         self.conv_module_name.append("extra_1")
-        self.conv_module.append(omth_blocks.conv_block(in_channel, [1024, 1024],
+        self.conv_module.append(omth_blocks.conv_block(384, [384, 384],
                                                        kernel_sizes=[3, 1], stride=[1, 1], padding=[3, 0],
                                                        dilation=[3, 1], batch_norm=batch_norm))
         self.conv_module_name.append("extra_2")
-        self.conv_module.append(omth_blocks.conv_block(1024, [256, 512], kernel_sizes=[1, 3],
+        self.conv_module.append(omth_blocks.conv_block(384, [256, 384], kernel_sizes=[1, 3],
                                                        stride=[1, 2], padding=[0, 1], batch_norm=batch_norm))
-
+        self.conv_module.apply(init.init_cnn)
+        
         # Location and Confidence Layer
         for i, in_channel in enumerate(cfg['loc_and_conf']):
             anchor = calculate_anchor_number(cfg, i)
@@ -170,7 +187,7 @@ class SSD(nn.Module):
                                                             padding=[[[3, 0], 1, 0], [[2, 0], 1, 0], [[1, 0], 1, 0], [1, 0]],
                                                             batch_norm=None, inner_maxout=None)
                 else:
-                    conf_layer = omth_blocks.conv_block(512, filters=[in_channel, int(in_channel / 2)],
+                    conf_layer = omth_blocks.conv_block(in_channel, filters=[in_channel, int(in_channel / 2)],
                                                         kernel_sizes=[1, 3], stride=[1, 1], padding=[0, 1], activation=None)
                 conf_layer.apply(init.init_cnn)
                 self.conf_layers.append(conf_layer)
@@ -358,7 +375,7 @@ class Conf_Layer(nn.Module):
 if __name__ == "__main__":
     x = torch.randn(2, 3, 512, 512).to("cuda")
     #print(cfg)
-    ssd = SSD(cfg, connect_loc_to_conf=True).to("cuda")
+    ssd = SSD(cfg, connect_loc_to_conf=True, in_channel=384, incep_conf=True, incep_loc=True).to("cuda")
     loc, conf, prior = ssd(x, verbose=True)
     print(loc.shape)
     print(conf.shape)
