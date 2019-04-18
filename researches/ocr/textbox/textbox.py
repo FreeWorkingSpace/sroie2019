@@ -11,6 +11,7 @@ from researches.ocr.textbox.tb_loss import MultiBoxLoss
 from researches.ocr.textbox.tb_utils import *
 from researches.ocr.textbox.tb_preprocess import *
 from researches.ocr.textbox.tb_augment import *
+from researches.ocr.textbox.tb_postprocess import combine_boxes
 from researches.ocr.textbox.tb_vis import visualize_bbox, print_box
 from omni_torch.networks.optimizer.adabound import AdaBound
 import omni_torch.visualize.basic as vb
@@ -35,7 +36,7 @@ def fit(args, cfg, net, dataset, optimizer, is_train):
     epoch_eval_result = {}
     for epoch in range(args.epoches_per_phase):
         visualize = False
-        if args.curr_epoch != 0 and args.curr_epoch % 10 == 0 and epoch == 0:
+        if args.curr_epoch % 10 == 0 and epoch == 0:
             print("Visualizing prediction result...")
             visualize = True
         start_time = time.time()
@@ -66,7 +67,8 @@ def fit(args, cfg, net, dataset, optimizer, is_train):
                 loss.backward()
                 optimizer.step()
             else:
-                eval_result = evaluate(images, out.data, targets, batch_idx, visualize=visualize)
+                eval_result = evaluate(images, out.data, targets, batch_idx,
+                                       visualize=visualize, post_combine=True)
                 for key in eval_result.keys():
                     if key in epoch_eval_result:
                         epoch_eval_result[key] += eval_result[key]
@@ -93,7 +95,7 @@ def val(args, cfg, net, dataset, optimizer, prior):
         fit(args, cfg, net, dataset, optimizer, prior, False)
 
 
-def evaluate(img, detections, targets, batch_idx, visualize=False):
+def evaluate(img, detections, targets, batch_idx, visualize=False, post_combine=False):
     conf_thresholds = [0.1, 0.2, 0.3, 0.4]
     eval_result = {}
     for threshold in conf_thresholds:
@@ -115,6 +117,9 @@ def evaluate(img, detections, targets, batch_idx, visualize=False):
         text_boxes_eliminated = boxes[overlap.squeeze(1) <= 0.5]
         if text_boxes_eliminated.size(0) == 0:
             text_boxes_eliminated = tuple()
+
+        if post_combine:
+            text_boxes = combine_boxes(text_boxes, w=img.size(3), h=img.size(2), y_thres=5)
 
         accuracy, precision, recall = measure(text_boxes, gt_boxes)
         if (recall + precision) < 1e-3:
@@ -160,7 +165,7 @@ def main():
         print("\n =============== Cross Validation: %s/%s ================ " %
               (idx + 1, len(datasets)))
         net = model.SSD(cfg, connect_loc_to_conf=True, fix_size=args.fix_size,
-                        incep_conf=True, incep_loc=True, nms_thres=0.1)
+                        incep_conf=True, incep_loc=True, nms_thres=0.4)
         net = torch.nn.DataParallel(net)
         # Input dimension of bbox is different in each step
         torch.backends.cudnn.benchmark = True
@@ -168,7 +173,7 @@ def main():
         if args.fix_size:
             net.module.prior = net.module.prior.cuda()
         if args.finetune:
-            net = util.load_latest_model(args, net, prefix="dilation")
+            net = util.load_latest_model(args, net, prefix="good")
         # Using the latest optimizer, better than Adam and SGD
         optimizer = AdaBound(net.parameters(), lr=args.learning_rate, weight_decay=args.weight_decay,)
 

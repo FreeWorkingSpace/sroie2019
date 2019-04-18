@@ -13,7 +13,7 @@ def GeneralPattern(args):
     args.loading_threads = 2
     args.img_channel = 3
     args.epoch_num = 2000
-    args.finetune = False
+    args.finetune = True
 
     # Because augmentation operation is defined in tb_augment.py
     args.do_imgaug = False
