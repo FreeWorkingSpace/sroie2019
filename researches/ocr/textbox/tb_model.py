@@ -36,7 +36,7 @@ cfg = {
     # especially at swallow conv layers, so as not to create lots of prior boxes
     'stride': [1, 1, 1],
     # Input depth for location and confidence layers
-    'loc_and_conf': [256, 384, 384],
+    'loc_and_conf': [512, 512, 512],
     # The hyperparameter to decide the Loss
     'variance': [0.1, 0.2],
     'var_updater': 1,
@@ -138,39 +138,39 @@ class SSD(nn.Module):
         self.conv_module_name.append("conv_1")
         self.conv_module.append(nn.Sequential(*net[:6]))
         self.conv_module_name.append("conv_2")
-        block = omth_blocks.conv_block(64, filters=[64, 128],kernel_sizes=[3, 3], stride=[1, 1],
-                                       padding=[1, 1],batch_norm=batch_norm)
-        block.add_module("2", ceil_maxout)
-        self.conv_module.append(block)
-        #self.conv_module.append(nn.Sequential(*net[6:13]))
+        #block = omth_blocks.conv_block(64, filters=[64, 128],kernel_sizes=[3, 3], stride=[1, 1],
+        #                               padding=[1, 1],batch_norm=batch_norm)
+        #block.add_module("2", ceil_maxout)
+        #self.conv_module.append(block)
+        self.conv_module.append(nn.Sequential(*net[6:13]))
         self.conv_module_name.append("conv_3")
-        block = omth_blocks.conv_block(128, filters=[128, 128], kernel_sizes=[3, 1], stride=[1, 1],
-                                       padding=[1, 0], batch_norm=batch_norm)
-        block.add_module("3", ceil_maxout)
-        self.conv_module.append(block)
-        #self.conv_module.append(nn.Sequential(*net[13:23]))
+        #block = omth_blocks.conv_block(128, filters=[128, 128], kernel_sizes=[3, 1], stride=[1, 1],
+        #                               padding=[1, 0], batch_norm=batch_norm)
+        #block.add_module("3", ceil_maxout)
+        #self.conv_module.append(block)
+        self.conv_module.append(nn.Sequential(*net[13:23]))
         self.conv_module_name.append("conv_4")
-        block = omth_blocks.conv_block(128, filters=[256, 256], kernel_sizes=[3, 1], stride=[1, 1],
-                                       padding=[1, 0], batch_norm=batch_norm)
-        block.add_module("4", ceil_maxout)
-        self.conv_module.append(block)
-        #self.conv_module.append(nn.Sequential(*net[23:33]))
+        #block = omth_blocks.conv_block(128, filters=[256, 256], kernel_sizes=[3, 1], stride=[1, 1],
+        #                               padding=[1, 0], batch_norm=batch_norm)
+        #block.add_module("4", ceil_maxout)
+        #self.conv_module.append(block)
+        self.conv_module.append(nn.Sequential(*net[23:33]))
         self.conv_module_name.append("conv_5")
-        block = omth_blocks.conv_block(256, filters=[384, 384], kernel_sizes=[3, 1], stride=[1, 1],
-                                       padding=[1, 0], batch_norm=batch_norm)
-        block.add_module("5", ceil_maxout)
-        self.conv_module.append(block)
-        #self.conv_module.append(nn.Sequential(*net[33:43]))
+        #block = omth_blocks.conv_block(256, filters=[384, 384], kernel_sizes=[3, 1], stride=[1, 1],
+        #                               padding=[1, 0], batch_norm=batch_norm)
+        #block.add_module("5", ceil_maxout)
+        #self.conv_module.append(block)
+        self.conv_module.append(nn.Sequential(*net[33:43]))
 
         # Extra Layers
         self.conv_module_name.append("extra_1")
-        self.conv_module.append(omth_blocks.conv_block(384, [384, 384],
+        self.conv_module.append(omth_blocks.conv_block(512, [512, 512],
                                                        kernel_sizes=[3, 1], stride=[1, 1], padding=[3, 0],
                                                        dilation=[3, 1], batch_norm=batch_norm))
         self.conv_module_name.append("extra_2")
-        self.conv_module.append(omth_blocks.conv_block(384, [256, 384], kernel_sizes=[1, 3],
+        self.conv_module.append(omth_blocks.conv_block(512, [256, 512], kernel_sizes=[1, 3],
                                                        stride=[1, 2], padding=[0, 1], batch_norm=batch_norm))
-        self.conv_module.apply(init.init_cnn)
+        #self.conv_module.apply(init.init_cnn)
         
         # Location and Confidence Layer
         for i, in_channel in enumerate(cfg['loc_and_conf']):
