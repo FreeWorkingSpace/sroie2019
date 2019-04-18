@@ -36,8 +36,8 @@ def fit(args, cfg, net, dataset, optimizer, is_train):
     epoch_eval_result = {}
     for epoch in range(args.epoches_per_phase):
         visualize = False
-        if args.curr_epoch % 10 == 0 and epoch == 0:
-            print("Visualizing prediction result...")
+        if args.curr_epoch % 5 == 0 and epoch == 0:
+            print("Visualizing prediction result at %d th epoch %d th iteration"%(args.curr_epoch, epoch))
             visualize = True
         start_time = time.time()
         criterion = MultiBoxLoss(cfg, neg_pos=3)
@@ -96,7 +96,7 @@ def val(args, cfg, net, dataset, optimizer, prior):
 
 
 def evaluate(img, detections, targets, batch_idx, visualize=False, post_combine=False):
-    conf_thresholds = [0.1, 0.2, 0.3, 0.4]
+    conf_thresholds = [0.02, 0.05, 0.1, 0.2]
     eval_result = {}
     for threshold in conf_thresholds:
         idx = detections[0, 1, :, 0] >= threshold
@@ -110,23 +110,22 @@ def evaluate(img, detections, targets, batch_idx, visualize=False, post_combine=
             print("No predicted box in this patch")
             break
 
-        # Eliminate overlap area smaller than 0.5
+        if post_combine:
+            boxes = combine_boxes(boxes, w=img.size(3), h=img.size(2), y_thres=5)
         jac = jaccard(boxes, gt_boxes)
         overlap, idx = jac.max(1, keepdim=True)
+        # Eliminate overlap area smaller than 0.5
         text_boxes = boxes[overlap.squeeze(1) > 0.5]
         text_boxes_eliminated = boxes[overlap.squeeze(1) <= 0.5]
         if text_boxes_eliminated.size(0) == 0:
             text_boxes_eliminated = tuple()
-
-        if post_combine:
-            text_boxes = combine_boxes(text_boxes, w=img.size(3), h=img.size(2), y_thres=5)
 
         accuracy, precision, recall = measure(text_boxes, gt_boxes)
         if (recall + precision) < 1e-3:
             f1_score = 0
         else:
             f1_score = 2 * (recall * precision) / (recall + precision)
-        if visualize and threshold == 0.4:
+        if visualize and threshold == 0.1:
             pred = [[float(coor) for coor in area] for area in text_boxes]
             gt = [[float(coor) for coor in area] for area in gt_boxes]
             print_box(text_boxes_eliminated, green_boxes=gt, blue_boxes=pred, idx=batch_idx,
@@ -151,7 +150,6 @@ def measure(pred_boxes, gt_boxes):
 def main():
     if args.fix_size:
         aug = aug_sroie()
-        #aug_test = aug_sroie()
     else:
         aug = aug_sroie_dynamic_2()
         args.batch_size_per_gpu = 1
@@ -165,7 +163,7 @@ def main():
         print("\n =============== Cross Validation: %s/%s ================ " %
               (idx + 1, len(datasets)))
         net = model.SSD(cfg, connect_loc_to_conf=True, fix_size=args.fix_size,
-                        incep_conf=True, incep_loc=True, nms_thres=0.4)
+                        incep_conf=True, incep_loc=True, nms_thres=args.nms_threshold)
         net = torch.nn.DataParallel(net)
         # Input dimension of bbox is different in each step
         torch.backends.cudnn.benchmark = True
@@ -173,7 +171,7 @@ def main():
         if args.fix_size:
             net.module.prior = net.module.prior.cuda()
         if args.finetune:
-            net = util.load_latest_model(args, net, prefix="good")
+            net = util.load_latest_model(args, net, prefix="cv_1")
         # Using the latest optimizer, better than Adam and SGD
         optimizer = AdaBound(net.parameters(), lr=args.learning_rate, weight_decay=args.weight_decay,)
 

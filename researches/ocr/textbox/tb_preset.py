@@ -29,6 +29,7 @@ def Unique_Patterns(args):
     args.train_aux = [{"txt": "txt", "img": "jpg"}]
     args.min_bbox_threshold = 0.01
     args.fix_size = True
+    args.nms_threshold = 0.4
     return args
 
 
