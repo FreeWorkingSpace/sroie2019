@@ -46,6 +46,8 @@ def fit(args, cfg, net, dataset, optimizer, is_train):
         for batch_idx, (images, targets) in enumerate(dataset):
             #if not net.fix_size:
                 #assert images.size(0) == 1, "batch size for dynamic input shape can only be 1 for 1 GPU RIGHT NOW!"
+            if len(targets) == 0:
+                continue
             images = images.cuda()
             ratios = images.size(3) / images.size(2)
             if ratios != 1.0:
@@ -53,7 +55,8 @@ def fit(args, cfg, net, dataset, optimizer, is_train):
             targets = [ann.cuda() for ann in targets]
             out = net(images, is_train)
             if args.curr_epoch == 0 and batch_idx == 0:
-                visualize_bbox(args, cfg, images, targets, net.module.prior, batch_idx)
+                #visualize_bbox(args, cfg, images, targets, net.module.prior, batch_idx)
+                pass
             if is_train:
                 loss_l, loss_c = criterion(out, targets, ratios)
                 loss = loss_l + loss_c
@@ -63,8 +66,6 @@ def fit(args, cfg, net, dataset, optimizer, is_train):
                 loss.backward()
                 optimizer.step()
             else:
-                if len(targets) == 0:
-                    continue
                 eval_result = evaluate(images, out.data, targets, batch_idx, visualize=visualize)
                 for key in eval_result.keys():
                     if key in epoch_eval_result:
@@ -159,7 +160,7 @@ def main():
         print("\n =============== Cross Validation: %s/%s ================ " %
               (idx + 1, len(datasets)))
         net = model.SSD(cfg, connect_loc_to_conf=True, fix_size=args.fix_size,
-                        incep_conf=True, incep_loc=True, nms_thres=0.4)
+                        incep_conf=True, incep_loc=True, nms_thres=0.1)
         net = torch.nn.DataParallel(net)
         # Input dimension of bbox is different in each step
         torch.backends.cudnn.benchmark = True

@@ -9,11 +9,11 @@ def GeneralPattern(args):
     args.seed = 1
     # Training Hyperparameter
     args.learning_rate = 1e-4
-    args.batch_size_per_gpu = 6
+    args.batch_size_per_gpu = 4
     args.loading_threads = 2
     args.img_channel = 3
     args.epoch_num = 2000
-    args.finetune = True
+    args.finetune = False
 
     # Because augmentation operation is defined in tb_augment.py
     args.do_imgaug = False
