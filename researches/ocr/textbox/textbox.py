@@ -16,7 +16,7 @@ from researches.ocr.textbox.tb_vis import visualize_bbox, print_box
 from omni_torch.networks.optimizer.adabound import AdaBound
 import omni_torch.visualize.basic as vb
 
-
+PIC = os.path.expanduser("~/Pictures/")
 TMPJPG = os.path.expanduser("~/Pictures/tmp.jpg")
 cfg = model.cfg
 args = util.get_args(preset.PRESET)
@@ -56,7 +56,7 @@ def fit(args, cfg, net, detector, dataset, optimizer, is_train):
             targets = [ann.cuda() for ann in targets]
             out = net(images, is_train)
             if args.curr_epoch == 0 and batch_idx == 0:
-                visualize_bbox(args, cfg, images, targets, net.module.prior, batch_idx)
+                #visualize_bbox(args, cfg, images, targets, net.module.prior, batch_idx)
                 pass
             if is_train:
                 loss_l, loss_c = criterion(out, targets, ratios)
@@ -118,53 +118,81 @@ def val(args, cfg, net, dataset, optimizer, prior):
 def evaluate(img, detections, targets, batch_idx, eval_thres, visualize=False, post_combine=False):
     eval_result = {}
     save_dir = os.path.expanduser("~/Pictures/")
+    w = img.size(3)
+    h = img.size(2)
     for threshold in eval_thres:
         idx = detections[0, 1, :, 0] >= threshold
-        boxes = detections[0, 1, idx, 1:]
+        _boxes = detections[0, 1, idx, 1:]
         gt_boxes = targets[0][:, :-1].data
-
         if gt_boxes.size(0) == 0:
             print("No ground truth box in this patch")
             break
-        if boxes.size(0) == 0:
+        if _boxes.size(0) == 0:
             print("No predicted box in this patch")
             break
-
-        if post_combine:
-            boxes = combine_boxes(boxes, w=img.size(3), h=img.size(2), y_thres=5)
+        boxes = combine_boxes(_boxes, w=w, h=h)
         jac = jaccard(boxes, gt_boxes)
         overlap, idx = jac.max(1, keepdim=True)
-        # Eliminate overlap area smaller than 0.5
-        text_boxes = boxes[overlap.squeeze(1) > 0.5]
-        text_boxes_eliminated = boxes[overlap.squeeze(1) <= 0.5]
-        if text_boxes_eliminated.size(0) == 0:
-            text_boxes_eliminated = tuple()
+        # This is not DetEval
+        positive_pred = boxes[overlap.squeeze(1) > 0.2]
+        negative_pred = boxes[overlap.squeeze(1) <= 0.2]
+        if negative_pred.size(0) == 0:
+            negative_pred = tuple()
+        #print_box(blue_boxes=positive_pred, green_boxes=gt_boxes, red_boxes=negative_pred,
+                  #img=vb.plot_tensor(args, img, margin=0), save_dir=save_dir)
 
-        accuracy, precision, recall = measure(text_boxes, gt_boxes)
+        accuracy, precision, recall = measure(positive_pred, gt_boxes, width=w, height=h)
         if (recall + precision) < 1e-3:
             f1_score = 0
         else:
             f1_score = 2 * (recall * precision) / (recall + precision)
         if visualize and threshold == 0.1:
-            pred = [[float(coor) for coor in area] for area in text_boxes]
+            pred = [[float(coor) for coor in area] for area in positive_pred]
             gt = [[float(coor) for coor in area] for area in gt_boxes]
-            print_box(text_boxes_eliminated, green_boxes=gt, blue_boxes=pred, idx=batch_idx,
+            print_box(negative_pred, green_boxes=gt, blue_boxes=pred, idx=batch_idx,
                       img=vb.plot_tensor(args, img, margin=0), save_dir=args.val_log)
         eval_result.update({threshold: [accuracy, precision, recall, f1_score]})
     return eval_result
 
 
-def measure(pred_boxes, gt_boxes):
-    if pred_boxes.size(0) == 0:
+def measure(pred_boxes, gt_boxes, width, height):
+    if gt_boxes.size(0) == 0 and pred_boxes.size(0) == 0:
+        return 1.0, 1.0, 1.0
+    elif gt_boxes.size(0) == 0 and pred_boxes.size(0) != 0:
         return 0.0, 0.0, 0.0
-    inter = intersect(pred_boxes, gt_boxes)
-    text_area = get_box_size(pred_boxes)
-    gt_area = get_box_size(gt_boxes)
-    num_sample = max(text_area.size(0),  gt_area.size(0))
-    accuracy = torch.sum(jaccard(pred_boxes, gt_boxes).max(0)[0]) / num_sample
-    precision = torch.sum(inter.max(1)[0] / text_area) / num_sample
-    recall = torch.sum(inter.max(0)[0] / gt_area) / num_sample
-    return float(accuracy), float(precision), float(recall)
+    elif gt_boxes.size(0) != 0 and pred_boxes.size(0) == 0:
+        return 0.0, 0.0, 0.0
+    else:
+        """
+        scale = torch.Tensor([width, height, width, height])
+        canvas_p, canvas_g = [torch.zeros(height, width).byte()] * 2
+        if pred_boxes.is_cuda or gt_boxes.is_cuda:
+            scale = scale.cuda()
+            canvas_p = canvas_p.cuda()
+            canvas_g = canvas_g.cuda()
+        max_size = max(width, height)
+        scaled_p = (scale.unsqueeze(0).expand_as(pred_boxes) * pred_boxes).long().clamp_(0, max_size)
+        scaled_g = (scale.unsqueeze(0).expand_as(gt_boxes) * gt_boxes).long().clamp_(0, max_size)
+        for g in scaled_g:
+            canvas_g[g[0]:g[2], g[1]:g[3]] = 1
+        for p in scaled_p:
+            canvas_p[p[0]:p[2], p[1]:p[3]] = 1
+        inter = canvas_g * canvas_p
+        union = canvas_g + canvas_p >= 1
+
+        vb.plot_tensor(args, inter.permute(1, 0).unsqueeze(0).unsqueeze(0), margin=0, path=PIC+"tmp_inter.jpg")
+        vb.plot_tensor(args, union.permute(1, 0).unsqueeze(0).unsqueeze(0), margin=0, path=PIC+"tmp_union.jpg")
+        vb.plot_tensor(args, canvas_g.permute(1, 0).unsqueeze(0).unsqueeze(0), margin=0, path=PIC+"tmp_gt.jpg")
+        vb.plot_tensor(args, canvas_p.permute(1, 0).unsqueeze(0).unsqueeze(0), margin=0, path=PIC+"tmp_pd.jpg")
+        """
+        inter = intersect(pred_boxes, gt_boxes)
+        text_area = get_box_size(pred_boxes)
+        gt_area = get_box_size(gt_boxes)
+        num_sample = max(text_area.size(0),  gt_area.size(0))
+        accuracy = torch.sum(jaccard(pred_boxes, gt_boxes).max(0)[0]) / num_sample
+        precision = torch.sum(inter.max(1)[0] / text_area) / num_sample
+        recall = torch.sum(inter.max(0)[0] / gt_area) / num_sample
+        return float(accuracy), float(precision), float(recall)
 
 
 def main():
@@ -198,10 +226,10 @@ def main():
         optimizer = AdaBound(net.parameters(), lr=args.learning_rate, weight_decay=args.weight_decay,)
 
         for epoch in range(args.epoch_num):
-            #loc_avg, conf_avg = fit(args, cfg, net, detector, train_set, optimizer, is_train=True)
-            #loc_loss.append(loc_avg)
-            #conf_loss.append(conf_avg)
-            #train_losses = [np.asarray(loc_loss), np.asarray(conf_loss)]
+            loc_avg, conf_avg = fit(args, cfg, net, detector, train_set, optimizer, is_train=True)
+            loc_loss.append(loc_avg)
+            conf_loss.append(conf_avg)
+            train_losses = [np.asarray(loc_loss), np.asarray(conf_loss)]
             if val_set is not None:
                 accu, pre, rec, f1 = fit(args, cfg, net, detector, val_set, optimizer, is_train=False)
                 accuracy.append(accu)
@@ -215,7 +243,7 @@ def main():
                                 keep_latest=20)
             if epoch > 5:
                 # Train losses
-                #vb.plot_loss_distribution(train_losses, ["location", "confidence"], args.loss_log, dt + "_loss", window=5)
+                vb.plot_loss_distribution(train_losses, ["location", "confidence"], args.loss_log, dt + "_loss", window=5)
                 # Val metrics
                 vb.plot_loss_distribution(val_losses, ["Accuracy", "Precision", "Recall", "F1-Score"], args.loss_log,
                                           dt + "_val", window=5, bound=[0.0, 1.0])
@@ -225,7 +253,6 @@ def main():
 
 
 if __name__ == "__main__":
-    #test_rotation()
     main()
 
 
