@@ -15,7 +15,8 @@ from researches.ocr.textbox.tb_vis import visualize_bbox, print_box
 from omni_torch.networks.optimizer.adabound import AdaBound
 import omni_torch.visualize.basic as vb
 
-def combine_boxes(prediction, w, h, y_thres=2, combine_thres=0.8, overlap_thres=0.0):
+def combine_boxes(prediction, w, h, h_thres_pct = 1.5, y_thres_pct=1, combine_thres=0.7,
+                  overlap_thres=0.0, verbose=False):
     save_dir = os.path.expanduser("~/Pictures/")
     #print_box(red_boxes=prediction, shape=(h, w), step_by_step_r=True, save_dir=save_dir)
     output_box = []
@@ -27,39 +28,43 @@ def combine_boxes(prediction, w, h, y_thres=2, combine_thres=0.8, overlap_thres=
 
     # Merge the boxes contained in other boxes
     merged_boxes = []
-    unmerge_idx = torch.ones(prediction.size(0))
+    before_merge = prediction.size(0)
+    unmerge_idx = torch.ones(prediction.size(0)).byte()
     inter = intersect(prediction, prediction)
     pred_size = get_box_size(prediction).unsqueeze(0).expand_as(inter)
-    identity = torch.eye(inter.size(0)).cuda() if inter.is_cuda else torch.eye(inter.size(0))
     #indicator = 2 / (inter / pred_size + pred_size / inter) - identity
-    indicator = (inter / pred_size - identity) > combine_thres
+    indicator = (inter / pred_size) > combine_thres
     for idctr in indicator:
+        if torch.sum(idctr) <= 1:
+            # the element on the diagonal is 1
+            continue
         # eliminate the index of predicted boxes that need to be merged
         unmerge_idx[idctr] = 0
-        idx = idctr.unsqueeze(0).expand_as(indicator)
-        # once a box is merged, it does not need tp be merged or calculated again
-        indicator[idx] = 0
         merged_boxes.append(
             torch.cat([torch.min(prediction[idctr][:, :2], dim=0)[0], torch.max(prediction[idctr][:, 2:], dim=0)[0]])
         )
-    merged_boxes = torch.stack(merged_boxes, dim=0)
-    unmerged_boxes = prediction[unmerge_idx]
-    prediction = torch.cat([unmerged_boxes, merged_boxes], dim=0)
+        idx = idctr.unsqueeze(0).expand_as(indicator)
+        # once a box is merged, it does not need tp be merged or calculated again
+        indicator[idx] = 0
+    if len(merged_boxes) > 0:
+        merged_boxes = torch.stack(merged_boxes, dim=0)
+        unmerged_boxes = prediction[unmerge_idx]
+        prediction = torch.cat([unmerged_boxes, merged_boxes], dim=0)
+    after_merge = prediction.size(0)
+    if before_merge > after_merge and verbose:
+        print("merged %d boxes"%(before_merge - after_merge))
 
     # Find boxes with similar height
     vertical_height = (prediction[:, 3] - prediction[:, 1])
     vertical_height = vertical_height.unsqueeze(0).repeat(vertical_height.size(0), 1)
     dis_matrix = torch.abs(vertical_height - vertical_height.permute(1, 0))
-    idx_h = dis_matrix < y_thres
-
+    idx_h = dis_matrix < (h_thres_pct * h / 100)
     # Find boxes at almost same height
     vertical_height = (prediction[:, 3] + prediction[:, 1]) / 2
     vertical_height = vertical_height.unsqueeze(0).repeat(vertical_height.size(0), 1)
     dis_matrix = torch.abs(vertical_height - vertical_height.permute(1, 0))
-    idx_v = dis_matrix < y_thres
-
+    idx_v = dis_matrix < (y_thres_pct * h / 100)
     idx = idx_h * idx_v
-
     # Iterate idx in axis=0
     eliminated_box_id = set([])
     for i, box_id in enumerate(idx):
@@ -83,6 +88,8 @@ def combine_boxes(prediction, w, h, y_thres=2, combine_thres=0.8, overlap_thres=
                     continue
                 elif int(torch.sum(similar_id)) == 1:
                     # this box has no intersecting boxes
+                    if int(_box_id[(similar_id > 0).nonzero().squeeze()]) in eliminated_box_id:
+                        continue
                     eliminated_box_id.add(_box_id[(similar_id > 0).nonzero().squeeze()])
                     output_box.append(qualify_box[similar_id].squeeze() / _scale)
                 else:
@@ -95,6 +102,9 @@ def combine_boxes(prediction, w, h, y_thres=2, combine_thres=0.8, overlap_thres=
                 zero_id = similar_id.unsqueeze(0).repeat(similar_boxes.size(0), 1)
                 similar_boxes[zero_id] = 0
     output = torch.stack(output_box, dim=0)
+    after_combine = output.size(0)
+    if after_merge > after_combine and verbose:
+        print("Combined %d boxes"%(after_merge - after_combine))
     return output
 
 
