@@ -25,7 +25,7 @@ if not torch.cuda.is_available():
 dt = datetime.datetime.now().strftime("%Y-%m-%d_%H:%M")
 
 
-def fit(args, cfg, net, dataset, optimizer, is_train):
+def fit(args, cfg, net, detector, dataset, optimizer, is_train):
     def avg(list):
         return sum(list) / len(list)
     if is_train:
@@ -33,7 +33,7 @@ def fit(args, cfg, net, dataset, optimizer, is_train):
     else:
         net.eval()
     Loss_L, Loss_C = [], []
-    epoch_eval_result = {}
+    epoch_eval_results = {}
     for epoch in range(args.epoches_per_phase):
         visualize = False
         if args.curr_epoch % 5 == 0 and epoch == 0:
@@ -56,7 +56,7 @@ def fit(args, cfg, net, dataset, optimizer, is_train):
             targets = [ann.cuda() for ann in targets]
             out = net(images, is_train)
             if args.curr_epoch == 0 and batch_idx == 0:
-                #visualize_bbox(args, cfg, images, targets, net.module.prior, batch_idx)
+                visualize_bbox(args, cfg, images, targets, net.module.prior, batch_idx)
                 pass
             if is_train:
                 loss_l, loss_c = criterion(out, targets, ratios)
@@ -67,23 +67,43 @@ def fit(args, cfg, net, dataset, optimizer, is_train):
                 loss.backward()
                 optimizer.step()
             else:
-                eval_result = evaluate(images, out.data, targets, batch_idx,
-                                       visualize=visualize, post_combine=True)
-                for key in eval_result.keys():
-                    if key in epoch_eval_result:
-                        epoch_eval_result[key] += eval_result[key]
-                    else:
-                        epoch_eval_result.update({key: eval_result[key]})
+                # Turn the input param detector into None so as to
+                # Experiment with Detector's Hyper-parameters
+                for _i, top_k in enumerate([1500]):
+                    for _j, conf_thres in enumerate([0.05]):
+                        for _k, nms_thres in enumerate([0.3]):
+                            eval_thres = [0.1]
+                            key = "%s_%s_%s"%(top_k, conf_thres, nms_thres)
+                            if key in epoch_eval_results:
+                                batch_result = epoch_eval_results[key]
+                            else:
+                                batch_result = {}
+                            if detector is None:
+                                detector = model.Detect(num_classes=2, bkg_label=0, top_k=top_k,
+                                                        conf_thresh=conf_thres, nms_thresh=nms_thres)
+                            loc_data, conf_data, prior_data = out
+                            det_result = detector(loc_data, conf_data, prior_data)
+                            eval_result = evaluate(images, det_result.data, targets, batch_idx, eval_thres,
+                                                   visualize=visualize, post_combine=True)
+                            for _key in eval_result.keys():
+                                if _key in batch_result:
+                                    batch_result[_key] += eval_result[_key]
+                                else:
+                                    batch_result.update({_key: eval_result[_key]})
+                            epoch_eval_results.update({key: batch_result})
         if is_train:
             args.curr_epoch += 1
             print(" --- loc loss: %.4f, conf loss: %.4f, at epoch %04d, cost %.2f seconds ---" %
                   (avg(Loss_L), avg(Loss_C), args.curr_epoch + 1, time.time() - start_time))
     if not is_train:
-        for key in sorted(epoch_eval_result.keys()):
-            eval = np.mean(np.asarray(epoch_eval_result[key]).reshape((-1, 4)), axis=0)
-            print(" --- Conf=%s: accuracy=%.4f, precision=%.4f, recall=%.4f, f1-score=%.4f  ---" %
-                  (key, eval[0], eval[1], eval[2], eval[3]))
-        print("")
+        for key in sorted(epoch_eval_results.keys()):
+            keys = key.split("_")
+            print("top_k: %s, conf_thres: %s, nms_thres: %s"%(keys[0], keys[1], keys[2]))
+            for _key in sorted(epoch_eval_results[key]):
+                eval = np.mean(np.asarray(epoch_eval_results[key][_key]).reshape((-1, 4)), axis=0)
+                print(" --- Conf=%s: accuracy=%.4f, precision=%.4f, recall=%.4f, f1-score=%.4f  ---" %
+                  (_key, eval[0], eval[1], eval[2], eval[3]))
+            print("")
         # represent accuracy, precision, recall, f1_score
         return  eval[0], eval[1], eval[2], eval[3]
     else:
@@ -95,10 +115,10 @@ def val(args, cfg, net, dataset, optimizer, prior):
         fit(args, cfg, net, dataset, optimizer, prior, False)
 
 
-def evaluate(img, detections, targets, batch_idx, visualize=False, post_combine=False):
-    conf_thresholds = [0.02, 0.05, 0.1, 0.2]
+def evaluate(img, detections, targets, batch_idx, eval_thres, visualize=False, post_combine=False):
     eval_result = {}
-    for threshold in conf_thresholds:
+    save_dir = os.path.expanduser("~/Pictures/")
+    for threshold in eval_thres:
         idx = detections[0, 1, :, 0] >= threshold
         boxes = detections[0, 1, idx, 1:]
         gt_boxes = targets[0][:, :-1].data
@@ -157,6 +177,7 @@ def main():
                                          batch_size=args.batch_size_per_gpu * torch.cuda.device_count(),
                                          batch_size_val=1, auxiliary_info=args.train_aux, split_val=0.1,
                                          pre_process=None, aug=aug)
+    model_prefix = "768"
     for idx, (train_set, val_set) in enumerate(datasets):
         loc_loss, conf_loss = [], []
         accuracy, precision, recall, f1_score = [], [], [], []
@@ -165,23 +186,24 @@ def main():
         net = model.SSD(cfg, connect_loc_to_conf=True, fix_size=args.fix_size,
                         incep_conf=True, incep_loc=True, nms_thres=args.nms_threshold)
         net = torch.nn.DataParallel(net)
+        detector = model.Detect(num_classes=2, bkg_label=0, top_k=1500, conf_thresh=0.05, nms_thresh=0.3)
         # Input dimension of bbox is different in each step
         torch.backends.cudnn.benchmark = True
         net = net.cuda()
         if args.fix_size:
             net.module.prior = net.module.prior.cuda()
         if args.finetune:
-            net = util.load_latest_model(args, net, prefix="cv_1")
+            net = util.load_latest_model(args, net, prefix=model_prefix)
         # Using the latest optimizer, better than Adam and SGD
         optimizer = AdaBound(net.parameters(), lr=args.learning_rate, weight_decay=args.weight_decay,)
 
         for epoch in range(args.epoch_num):
-            loc_avg, conf_avg = fit(args, cfg, net, train_set, optimizer, is_train=True)
-            loc_loss.append(loc_avg)
-            conf_loss.append(conf_avg)
-            train_losses = [np.asarray(loc_loss), np.asarray(conf_loss)]
+            #loc_avg, conf_avg = fit(args, cfg, net, detector, train_set, optimizer, is_train=True)
+            #loc_loss.append(loc_avg)
+            #conf_loss.append(conf_avg)
+            #train_losses = [np.asarray(loc_loss), np.asarray(conf_loss)]
             if val_set is not None:
-                accu, pre, rec, f1 = fit(args, cfg, net, val_set, optimizer, is_train=False)
+                accu, pre, rec, f1 = fit(args, cfg, net, detector, val_set, optimizer, is_train=False)
                 accuracy.append(accu)
                 precision.append(pre)
                 recall.append(rec)
@@ -189,11 +211,11 @@ def main():
                 val_losses = [np.asarray(accuracy), np.asarray(precision),
                               np.asarray(recall), np.asarray(f1_score)]
             if epoch != 0 and epoch % 20 == 0:
-                util.save_model(args, args.curr_epoch, net.state_dict(), prefix="cv_%s" % (idx + 1),
+                util.save_model(args, args.curr_epoch, net.state_dict(), prefix=model_prefix,
                                 keep_latest=20)
             if epoch > 5:
                 # Train losses
-                vb.plot_loss_distribution(train_losses, ["location", "confidence"], args.loss_log, dt + "_loss", window=5)
+                #vb.plot_loss_distribution(train_losses, ["location", "confidence"], args.loss_log, dt + "_loss", window=5)
                 # Val metrics
                 vb.plot_loss_distribution(val_losses, ["Accuracy", "Precision", "Recall", "F1-Score"], args.loss_log,
                                           dt + "_val", window=5, bound=[0.0, 1.0])
