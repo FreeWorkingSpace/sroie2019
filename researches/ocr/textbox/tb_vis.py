@@ -6,9 +6,9 @@ import omni_torch.visualize.basic as vb
 from matplotlib import gridspec
 from researches.ocr.textbox.tb_utils import *
 
-def print_box(red_boxes=(), shape=0, green_boxes=(), blue_boxes=(), img=None, idx=None,
-              title=None, step_by_step_r=False, step_by_step_g=False, step_by_step_b=False,
-              name_prefix=None, save_dir=None):
+def print_box(red_boxes=(), shape=0, green_boxes=(), blue_boxes=(), img=None,
+              idx=None, title=None, step_by_step_r=False, step_by_step_g=False,
+              step_by_step_b=False, name_prefix=None, save_dir=None):
     # Generate the save folder and image save name
     if not name_prefix:
         name_prefix = "tmp"
@@ -22,7 +22,8 @@ def print_box(red_boxes=(), shape=0, green_boxes=(), blue_boxes=(), img=None, id
         save_dir = os.path.expanduser(save_dir)
     if not os.path.exists(save_dir):
         warnings.warn(
-            "The save_dir you specified (%s) does not exist, saving results under ~/Pictures"%(save_dir)
+            "The save_dir you specified (%s) does not exist, saving results under "
+            "~/Pictures"%(save_dir)
         )
         save_dir = os.path.expanduser("~/Pictures")
     img_path = os.path.join(save_dir, img_name)
@@ -86,7 +87,8 @@ def visualize_overlaps(cfg, target, label, prior, ratio):
         h, w = get_parameter(cfg['feature_map_sizes'][k])
         h_stride, w_stride = get_parameter(cfg['stride'][k])
         anchor_num = calculate_anchor_number(cfg, k)
-        prior_num = len(range(0, int(h), int(h_stride))) * len(range(0, int(w), int(w_stride))) * anchor_num
+        prior_num = len(range(0, int(h), int(h_stride))) * \
+                    len(range(0, int(w), int(w_stride))) * anchor_num
 
         # Get the index of matched prior boxes and collect these boxes
         _conf = conf[crop_start: crop_start + prior_num]
@@ -104,7 +106,8 @@ def visualize_overlaps(cfg, target, label, prior, ratio):
             coords.append(point_form(prior[crop_start+i:crop_start+i+1, :], ratio).squeeze())
 
         # Reshape _conf into the shape of image so as to visualize it
-        _conf = _conf.view(len(range(0, int(h), int(h_stride))), len(range(0, int(w), int(w_stride))), anchor_num)
+        _conf = _conf.view(len(range(0, int(h), int(h_stride))),
+                           len(range(0, int(w), int(w_stride))), anchor_num)
         _conf = _conf.permute(2, 0, 1)
         subs = ["ratio: %s"%(r) for r in cfg['box_ratios'][k]]
         subtitle.append("box height: %s\neffective samle: %s"
