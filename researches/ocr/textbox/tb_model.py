@@ -16,22 +16,22 @@ cfg = {
     # e.g. feature_map_sizes, box_height, box_height_large
     # Then it will be OK
     'conv_output': ["conv_4", "conv_5", "extra_2"],
-    'feature_map_sizes': [64, 32, 16],
+    'feature_map_sizes': [96, 48, 24],
     # For static input size only, when Dynamic mode is turned out, it will not be used
     # Must be 2d list or tuple
-    'input_img_size': [512, 512],
+    'input_img_size': [768, 768],
     # See the visualization result by enabling visualize_bbox in function fit of textbox.py
     # And change the settings according to the result
     # Some possible settings of box_height and box_height_large
     # 'box_height': [[16], [26], [36]],
     # 'box_height': [[10, 16], [26], [36]],
     # 'box_height': [[16], [26], []],
-    'box_height': [[14], [24], [38]],
-    'box_ratios': [[2, 4, 7, 11, 15, 20, 26], [1, 2, 5, 9, 13, 16, 18, 20], [1, 2, 5, 8, 10, 12]],
+    'box_height': [[18], [30], [46]],
+    'box_ratios': [[2, 4, 7, 11, 15, 20, 26], [0.5, 1, 2, 5, 9, 13, 16, 18, 20], [1, 2, 5, 8, 10, 12, 15]],
     # If big_box is True, then box_height_large and box_ratios_large will be used
     'big_box': True,
-    'box_height_large': [[18], [30], [46]],
-    'box_ratios_large': [[1, 2, 4, 7, 11, 15, 20], [0.5, 1, 3, 6, 9, 11, 13, 15], [1, 2, 4, 7, 9, 11]],
+    'box_height_large': [[24], [38], [54]],
+    'box_ratios_large': [[1, 2, 4, 7, 11, 15, 20], [0.5, 1, 3, 6, 9, 11, 13, 15, 17], [1, 2, 4, 7, 9, 11, 14]],
     # You can increase the stride when feature_map_size is large
     # especially at swallow conv layers, so as not to create lots of prior boxes
     'stride': [1, 1, 1],
@@ -43,74 +43,16 @@ cfg = {
     'alpha': 1,
     'alpha_updater': 1,
     # Jaccard Distance Threshold
-    'overlap_thresh': 0.5,
+    'overlap_thresh': 0.45,
     # Whether to constrain the prior boxes inside the image
     'clip': True,
 }
 
 
-class Detect(Function):
-    """At test time, Detect is the final layer of SSD.  Decode location preds,
-    apply non-maximum suppression to location predictions based on conf
-    scores and threshold to a top_k number of output predictions for both
-    confidence score and locations.
-    """
-
-    def __init__(self, num_classes, bkg_label, top_k, conf_thresh, nms_thresh):
-        self.num_classes = num_classes
-        self.background_label = bkg_label
-        self.top_k = top_k
-        # Parameters used in nms.
-        self.nms_thresh = nms_thresh
-        if nms_thresh <= 0:
-            raise ValueError('nms_threshold must be non negative.')
-        self.conf_thresh = conf_thresh
-        self.variance = cfg['variance']
-
-    def forward(self, loc_data, conf_data, prior_data):
-        """
-        Args:
-            loc_data: (tensor) Loc preds from loc layers
-                Shape: [batch,num_priors*4]
-            conf_data: (tensor) Shape: Conf preds from conf layers
-                Shape: [batch*num_priors,num_classes]
-            prior_data: (tensor) Prior boxes and variances from priorbox layers
-                Shape: [1,num_priors,4]
-        """
-        num = loc_data.size(0)  # batch size
-        num_priors = prior_data.size(0)
-        output = torch.zeros(num, self.num_classes, self.top_k, 5)
-        conf_preds = conf_data.view(num, num_priors,
-                                    self.num_classes).transpose(2, 1)
-
-        # Decode predictions into bboxes.
-        for i in range(num):
-            decoded_boxes = decode(loc_data[i], prior_data, self.variance)
-            # For each class, perform nms
-            conf_scores = conf_preds[i].clone()
-
-            for cl in range(1, self.num_classes):
-                c_mask = conf_scores[cl].gt(self.conf_thresh)
-                scores = conf_scores[cl][c_mask]
-                if scores.size(0) == 0:
-                    continue
-                l_mask = c_mask.unsqueeze(1).expand_as(decoded_boxes)
-                boxes = decoded_boxes[l_mask].view(-1, 4)
-                # idx of highest scoring and non-overlapping boxes per class
-                ids, count = nms(boxes, scores, self.nms_thresh, self.top_k)
-                output[i, cl, :count] = \
-                    torch.cat((scores[ids[:count]].unsqueeze(1),
-                               boxes[ids[:count]]), 1)
-        flt = output.contiguous().view(num, -1, 5)
-        _, idx = flt[:, :, 0].sort(1, descending=True)
-        _, rank = idx.sort(1)
-        flt[(rank < self.top_k).unsqueeze(-1).expand_as(flt)].fill_(0)
-        return output.cuda()
-
-
 class SSD(nn.Module):
-    def __init__(self, cfg, in_channel=512, batch_norm=nn.BatchNorm2d, fix_size=True,
-                 connect_loc_to_conf=False, incep_loc=False, incep_conf=False, nms_thres=0.2):
+    def __init__(self, cfg, btnk_chnl=512, batch_norm=nn.BatchNorm2d, fix_size=True,
+                 connect_loc_to_conf=False, incep_loc=False, incep_conf=False, nms_thres=0.2,
+                 nms_top_k=1600, nms_conf_thres=0.01):
         super().__init__()
         self.cfg = cfg
         self.num_classes = cfg['num_classes']
@@ -121,91 +63,131 @@ class SSD(nn.Module):
         self.conf_concate = nn.ModuleList([])
         self.conv_module_name = []
         self.softmax = nn.Softmax(dim=-1)
-        self.detect = Detect(self.num_classes, 0, 1600, 0.01, nms_thres)
+        #self.detect = Detect(self.num_classes, 0, nms_top_k, nms_conf_thres, nms_thres)
         self.connect_loc_to_conf = connect_loc_to_conf
         self.fix_size = fix_size
+        self.bottleneck_channel = btnk_chnl
+        self.batch_norm = batch_norm
         if fix_size:
             self.prior = self.create_prior()#.cuda()
 
+        # Create the backbone model structure
+        self.create_backbone_model()
+        
+        # Location and Confidence Layer
+        for i, in_channel in enumerate(cfg['loc_and_conf']):
+            anchor = calculate_anchor_number(cfg, i)
+            # Create Location and Confidence Layer
+            self.loc_layers.append(self.create_loc_layer(
+                in_channel, anchor, cfg['stride'][i], incep_loc=incep_loc, in_wid=128))
+            conf_layer, conf_concate = self.create_conf_layer(in_channel, anchor,
+                                                              cfg['stride'][i], incep_conf=incep_conf)
+            self.conf_layers.append(conf_layer)
+            self.conf_concate.append(conf_concate)
+
+
+    def create_backbone_model(self):
         # Prepare VGG-16 net with batch normalization
         vgg16_model = vgg16_bn(pretrained=True)
         net = list(vgg16_model.children())[0]
         # Replace the maxout with ceil in vanilla vgg16 net
         ceil_maxout = nn.MaxPool2d(kernel_size=2, stride=2, padding=0, dilation=1, ceil_mode=True)
         net = [ceil_maxout if type(n) is nn.MaxPool2d else n for n in net]
-        
+
         # Basic VGG Layers
         self.conv_module_name.append("conv_1")
         self.conv_module.append(nn.Sequential(*net[:6]))
         self.conv_module_name.append("conv_2")
-        #block = omth_blocks.conv_block(64, filters=[64, 128],kernel_sizes=[3, 3], stride=[1, 1],
+        # block = omth_blocks.conv_block(64, filters=[64, 128],kernel_sizes=[3, 3], stride=[1, 1],
         #                               padding=[1, 1],batch_norm=batch_norm)
-        #block.add_module("2", ceil_maxout)
-        #self.conv_module.append(block)
+        # block.add_module("2", ceil_maxout)
+        # self.conv_module.append(block)
         self.conv_module.append(nn.Sequential(*net[6:13]))
         self.conv_module_name.append("conv_3")
-        #block = omth_blocks.conv_block(128, filters=[128, 128], kernel_sizes=[3, 1], stride=[1, 1],
+        # block = omth_blocks.conv_block(128, filters=[128, 128], kernel_sizes=[3, 1], stride=[1, 1],
         #                               padding=[1, 0], batch_norm=batch_norm)
-        #block.add_module("3", ceil_maxout)
-        #self.conv_module.append(block)
+        # block.add_module("3", ceil_maxout)
+        # self.conv_module.append(block)
         self.conv_module.append(nn.Sequential(*net[13:23]))
         self.conv_module_name.append("conv_4")
-        #block = omth_blocks.conv_block(128, filters=[256, 256], kernel_sizes=[3, 1], stride=[1, 1],
+        # block = omth_blocks.conv_block(128, filters=[256, 256], kernel_sizes=[3, 1], stride=[1, 1],
         #                               padding=[1, 0], batch_norm=batch_norm)
-        #block.add_module("4", ceil_maxout)
-        #self.conv_module.append(block)
+        # block.add_module("4", ceil_maxout)
+        # self.conv_module.append(block)
         self.conv_module.append(nn.Sequential(*net[23:33]))
         self.conv_module_name.append("conv_5")
-        #block = omth_blocks.conv_block(256, filters=[384, 384], kernel_sizes=[3, 1], stride=[1, 1],
+        # block = omth_blocks.conv_block(256, filters=[384, 384], kernel_sizes=[3, 1], stride=[1, 1],
         #                               padding=[1, 0], batch_norm=batch_norm)
-        #block.add_module("5", ceil_maxout)
-        #self.conv_module.append(block)
+        # block.add_module("5", ceil_maxout)
+        # self.conv_module.append(block)
         self.conv_module.append(nn.Sequential(*net[33:43]))
 
         # Extra Layers
         self.conv_module_name.append("extra_1")
-        self.conv_module.append(omth_blocks.conv_block(512, [512, 512],
+        self.conv_module.append(omth_blocks.conv_block(self.bottleneck_channel, [512, 512],
                                                        kernel_sizes=[3, 1], stride=[1, 1], padding=[3, 0],
-                                                       dilation=[3, 1], batch_norm=batch_norm))
+                                                       dilation=[3, 1], batch_norm=nn.BatchNorm2d))
         self.conv_module_name.append("extra_2")
         self.conv_module.append(omth_blocks.conv_block(512, [256, 512], kernel_sizes=[1, 3],
-                                                       stride=[1, 2], padding=[0, 1], batch_norm=batch_norm))
-        #self.conv_module.apply(init.init_cnn)
-        
-        # Location and Confidence Layer
-        for i, in_channel in enumerate(cfg['loc_and_conf']):
-            anchor = calculate_anchor_number(cfg, i)
-            # Create Location Layer
-            loc_layer = Loc_Layer(in_channel, anchor, cfg['stride'][i], incep_loc=incep_loc, in_wid=128)
-            self.loc_layers.append(loc_layer)
-            # Create Confidence Layer
-            if self.connect_loc_to_conf:
-                if incep_conf:
-                    conf_layer = omth_blocks.InceptionBlock(in_channel, stride=[[1, 1, 1], [1, 1, 1], [1, 1, 1], [1, 1]],
-                                                            kernel_sizes=[[[7, 1], 3, 1], [[5, 1], 3, 1], [[3, 1], 3, 1], [3, 1]],
-                                                            filters=[[128, 128, 64], [128, 128, 64], [128, 128, 64], [192, 64]],
-                                                            padding=[[[3, 0], 1, 0], [[2, 0], 1, 0], [[1, 0], 1, 0], [1, 0]],
-                                                            batch_norm=None, inner_maxout=None)
-                else:
-                    conf_layer = omth_blocks.conv_block(in_channel, filters=[in_channel, int(in_channel / 2)],
-                                                        kernel_sizes=[1, 3], stride=[1, 1], padding=[0, 1], activation=None)
-                conf_layer.apply(init.init_cnn)
-                self.conf_layers.append(conf_layer)
-                # In this layer, the output from loc_layer will be concatenated to the conf layer
-                # Feeding the conf layer with regressed location, helping the conf layer
-                # to get better prediction
-                conf_concat = omth_blocks.conv_block(256 + anchor * 4,
-                                                     filters=[int(in_channel / 4), anchor * 2], kernel_sizes=[1, 3],
-                                                     stride=[1, cfg['stride'][i]], padding=[0, 1], activation=None)
-                conf_concat.apply(init.init_cnn)
-                self.conf_concate.append(conf_concat)
+                                                       stride=[1, 2], padding=[0, 1], batch_norm=nn.BatchNorm2d))
+
+    def create_loc_layer(self, in_channel, anchor, stride, incep_loc=False, in_wid=128):
+        loc_layer = nn.ModuleList([])
+        loc_layer.append(omth_blocks.conv_block(
+            in_channel, [in_channel, in_channel], kernel_sizes=[3, 1], stride=[1, 1],
+            padding=[3, 0], dilation=[3, 1], batch_norm=self.batch_norm))
+        if incep_loc:
+            loc_layer.append(omth_blocks.InceptionBlock(in_channel,
+                filters=[[128, 128, in_wid], [128, 128, in_wid], [128, 128, in_wid], [192, in_wid]],
+                kernel_sizes=[[[1, 7], 3, 1], [[1, 5], 3, 1], [[1, 3], 3, 1], [3, 1]],
+                stride=[[1, 1, 1], [1, 1, 1], [1, 1, 1], [1, 1]],
+                padding=[[[0, 3], 1, 0], [[0, 2], 1, 0], [[0, 1], 1, 0], [1, 0]],
+                batch_norm=None, inner_maxout=None)
+            )
+        input_channel = in_wid * 4 if incep_loc else in_channel
+        loc_layer.append(omth_blocks.conv_block(
+            input_channel, filters=[input_channel, int(input_channel / 2), anchor * 4],
+            kernel_sizes=[3, 1, 3], stride=[1, 1, stride], padding=[0, 1, 1], activation=None)
+        )
+        loc_layer.apply(init.init_cnn)
+        return loc_layer
+
+    def create_conf_layer(self, in_channel, anchor, stride, incep_conf=False):
+        conf_layer = nn.ModuleList([])
+        conf_layer.append(omth_blocks.conv_block(
+            in_channel, [in_channel, in_channel], kernel_sizes=[3, 1], stride=[1, 1],
+            padding=[3, 0], dilation=[3, 1], batch_norm=self.batch_norm)
+        )
+        if self.connect_loc_to_conf:
+            if incep_conf:
+                out_chnl = int(in_channel / 8)
+                out_chnl_2 = int(in_channel / 2) - (3 * out_chnl)
+                conf_layer.append(omth_blocks.InceptionBlock(
+                    in_channel, stride=[[1, 1, 1], [1, 1, 1], [1, 1, 1], [1, 1]],
+                    kernel_sizes=[[[1, 7], 3, 1], [[1, 5], 3, 1], [[1, 3], 3, 1], [3, 1]],
+                    filters=[[64, 64, out_chnl], [64, 64, out_chnl], [64, 64, out_chnl], [128, out_chnl_2]],
+                    padding=[[[0, 3], 1, 0], [[0, 2], 1, 0], [[0, 1], 1, 0], [1, 0]],
+                    batch_norm=None, inner_maxout=None))
             else:
-                print("incep_conf is turned off due to connect_loc_to_conf is False")
-                conf_layer = omth_blocks.conv_block(in_channel, filters=[in_channel, int(in_channel / 2), anchor * 2],
-                                                    kernel_sizes=[1, 3, 3], stride=[1, 1, cfg['stride'][i]],
-                                                    padding=[0, 1, 1], activation=None)
-                conf_layer.apply(init.init_cnn)
-                self.conf_layers.append(conf_layer)
+                conf_layer.append(omth_blocks.conv_block(
+                    in_channel, filters=[in_channel, int(in_channel / 2)],
+                    kernel_sizes=[1, 3], stride=[1, 1], padding=[0, 1], activation=None))
+            # In this layer, the output from loc_layer will be concatenated to the conf layer
+            # Feeding the conf layer with regressed location, helping the conf layer
+            # to get better prediction
+            conf_concate = omth_blocks.conv_block(
+                int(in_channel / 2) + anchor * 4, kernel_sizes=[3, 1, 3],
+                filters=[int(in_channel / 2), int(in_channel / 4), anchor * 2],
+                stride=[1, 1, stride], padding=[1, 0, 1], activation=None)
+            conf_concate.apply(init.init_cnn)
+        else:
+            print("incep_conf is turned off due to connect_loc_to_conf is False")
+            conf_layer.append(omth_blocks.conv_block(
+                in_channel, filters=[in_channel, int(in_channel / 2), anchor * 2],
+                kernel_sizes=[1, 3, 3], stride=[1, 1, stride], padding=[0, 1, 1], activation=None))
+            conf_concate = None
+        conf_layer.apply(init.init_cnn)
+        return conf_layer, conf_concate
 
     def create_prior(self, feature_map_size=None, input_size=None):
         """
@@ -268,115 +250,108 @@ class SSD(nn.Module):
         if not self.fix_size:
             self.prior = self.create_prior(feature_map_size=feature_shape, input_size=input_size).cuda()
         for i, x in enumerate(conv_output):
-            loc = self.loc_layers[i](x)
+            # Calculate location regression
+            loc = x
+            for layer in self.loc_layers[i]:
+                loc = layer(loc)
             locations.append(loc.permute(0, 2, 3, 1).contiguous().view(loc.size(0), -1, 4))
-            conf = self.conf_layers[i](x)
+
+            # Calculate prediction confidence
+            conf = x
+            for layer in self.conf_layers[i]:
+                conf = layer(conf)
             if self.connect_loc_to_conf:
                 _loc = loc.detach()
                 conf = torch.cat([conf, _loc], dim=1)
-                conf = self.conf_concate[i](conf)
+                for layer in self.conf_concate[i]:
+                    conf = layer(conf)
             confidences.append(conf.permute(0, 2, 3, 1).contiguous().view(conf.size(0), -1, self.num_classes))
             if verbose:
                 print("Loc output shape: %s\nConf output shape: %s" % (str(loc.shape), str(conf.shape)))
+
+        # Generate the result
         locations = torch.cat(locations, dim=1)
         confidences = torch.cat(confidences, dim=1)
         if is_train:
-            output = [locations, confidences, self.prior]
+            #output = [locations, confidences, self.prior]
+            return locations, confidences, self.prior
         else:
-            output = self.detect(locations, self.softmax(confidences), self.prior)
-        return output
+            #output = self.detect(locations, self.softmax(confidences), self.prior)
+            return locations, self.softmax(confidences), self.prior
+        #return output
 
-class Loc_Layer(nn.Module):
-    def __init__(self, in_channel, anchor, stride, incep_loc=False, in_wid=128, batch_norm=nn.BatchNorm2d):
-        super().__init__()
-        self.loc_layer = nn.ModuleList([])
-        self.loc_layer.append(omth_blocks.conv_block(in_channel, [in_channel, in_channel], kernel_sizes=[3, 1],
-                                                     stride=[1, 1], padding=[3, 0], dilation=[3, 1], batch_norm=batch_norm))
-        if incep_loc:
-            self.loc_layer.append(omth_blocks.InceptionBlock(
-                in_channel, filters=[[128, 128, in_wid], [128, 128, in_wid], [128, 128, in_wid], [192, in_wid]],
-                kernel_sizes=[[[7, 1], 3, 1], [[5, 1], 3, 1], [[3, 1], 3, 1], [3, 1]],
-                stride=[[1, 1, 1], [1, 1, 1], [1, 1, 1], [1, 1]],
-                padding=[[[3, 0], 1, 0], [[2, 0], 1, 0], [[1, 0], 1, 0], [1, 0]],
-                batch_norm=None, inner_maxout=None)
-            )
-        input_channel = in_wid * 4 if incep_loc else in_channel
-        self.loc_layer.append(omth_blocks.conv_block(
-            input_channel, filters=[input_channel, int(input_channel / 2), anchor * 4],
-            kernel_sizes=[3, 1, 3], stride=[1, 1, stride], padding=[0, 1, 1], activation=None)
-        )
-        self.loc_layer.apply(init.init_cnn)
 
-    def forward(self, x):
-        for layer in self.loc_layer:
-            x = layer(x)
-        return x
-    
-class Conf_Layer(nn.Module):
-    def __init__(self, in_channel, anchor, stride, incep_conf=False, cancat_loc=True,
-                 in_wid=128, batch_norm=nn.BatchNorm2d):
-        super().__init__()
-        self.cancat_loc = cancat_loc
-        self.conf_layer = nn.ModuleList([])
-        self.conf_layer.append(omth_blocks.conv_block(
-            in_channel, [in_channel, in_channel], kernel_sizes=[3, 1], stride=[1, 1],
-            padding=[3, 0], dilation=[3, 1], batch_norm=batch_norm)
-        )
-        if self.connect_loc_to_conf:
-            if incep_conf:
-                conf_layer = omth_blocks.InceptionBlock(in_channel, stride=[[1, 1, 1], [1, 1, 1], [1, 1, 1], [1, 1]],
-                                                        kernel_sizes=[[[7, 1], 3, 1], [[5, 1], 3, 1], [[3, 1], 3, 1],
-                                                                      [3, 1]],
-                                                        filters=[[128, 128, 64], [128, 128, 64], [128, 128, 64],
-                                                                 [192, 64]],
-                                                        padding=[[[3, 0], 1, 0], [[2, 0], 1, 0], [[1, 0], 1, 0],
-                                                                 [1, 0]],
-                                                        batch_norm=None, inner_maxout=None)
-            else:
-                conf_layer = omth_blocks.conv_block(512, filters=[in_channel, int(in_channel / 2)],
-                                                    kernel_sizes=[1, 3], stride=[1, 1], padding=[0, 1], activation=None)
-            conf_layer.apply(init.init_cnn)
-            self.conf_layers.append(conf_layer)
-            # In this layer, the output from loc_layer will be concatenated to the conf layer
-            # Feeding the conf layer with regressed location, helping the conf layer
-            # to get better prediction
-            self.conf_concate = omth_blocks.conv_block(256 + anchor * 4,
-                                                 filters=[int(in_channel / 4), anchor * 2], kernel_sizes=[1, 3],
-                                                 stride=[1, stride], padding=[0, 1], activation=None)
-            self.conf_concate.apply(init.init_cnn)
-        else:
-            print("incep_conf is turned off due to connect_loc_to_conf is False")
-            conf_layer = omth_blocks.conv_block(in_channel, filters=[in_channel, int(in_channel / 2), anchor * 2],
-                                                kernel_sizes=[1, 3, 3], stride=[1, 1, stride],
-                                                padding=[0, 1, 1], activation=None)
-            conf_layer.apply(init.init_cnn)
-            self.conf_layers.append(conf_layer)
-        
-        if incep_conf:
-            self.loc_incep_layer = omth_blocks.InceptionBlock(in_channel, stride=[[1, 1, 1], [1, 1, 1], [1, 1, 1], [1, 1]],
-                                                         kernel_sizes=[[[7, 1], 3, 1], [[5, 1], 3, 1], [[3, 1], 3, 1],[3, 1]],
-                                                         filters=[[128, 128, in_wid], [128, 128, in_wid], [128, 128, in_wid], [192, in_wid]],
-                                                         padding=[[[3, 0], 1, 0], [[2, 0], 1, 0], [[1, 0], 1, 0], [1, 0]],
-                                                         batch_norm=None, inner_maxout=None)
-            self.loc_incep_layer.apply(init.init_cnn)
-        input_channel = in_wid * 4 if incep_conf else in_channel
-        self.loc_layer = omth_blocks.conv_block(input_channel, filters=[input_channel, int(input_channel / 2), anchor * 4],
-                               kernel_sizes=[3, 1, 3], stride=[1, 1, stride], padding=[0, 1, 1],
-                               activation=None)
-        self.loc_layer.apply(init.init_cnn)
+class Detect(Function):
+    """At test time, Detect is the final layer of SSD.  Decode location preds,
+    apply non-maximum suppression to location predictions based on conf
+    scores and threshold to a top_k number of output predictions for both
+    confidence score and locations.
+    """
+    def __init__(self, num_classes, bkg_label, top_k, conf_thresh, nms_thresh):
+        self.num_classes = num_classes
+        self.background_label = bkg_label
+        self.top_k = top_k
+        # Parameters used in nms.
+        self.nms_thresh = nms_thresh
+        if nms_thresh <= 0:
+            raise ValueError('nms_threshold must be non negative.')
+        self.conf_thresh = conf_thresh
+        self.variance = cfg['variance']
 
-    def forward(self, x):
-        if self.incep_layer:
-            x = self.loc_incep_layer(x)
-        x = self.loc_layer(x)
-        return x
+    def forward(self, out):
+        """
+        Args:
+            loc_data: (tensor) Loc preds from loc layers
+                Shape: [batch,num_priors*4]
+            conf_data: (tensor) Shape: Conf preds from conf layers
+                Shape: [batch*num_priors,num_classes]
+            prior_data: (tensor) Prior boxes and variances from priorbox layers
+                Shape: [1,num_priors,4]
+        """
+        loc_data, conf_data, prior_data = out
+        num = loc_data.size(0)  # batch size
+        num_priors = prior_data.size(0)
+        output = torch.zeros(num, self.num_classes, self.top_k, 5)
+        conf_preds = conf_data.view(num, num_priors,
+                                    self.num_classes).transpose(2, 1)
+
+        # Decode predictions into bboxes.
+        for i in range(num):
+            decoded_boxes = decode(loc_data[i], prior_data, self.variance)
+            # For each class, perform nms
+            conf_scores = conf_preds[i].clone()
+
+            for cl in range(1, self.num_classes):
+                c_mask = conf_scores[cl].gt(self.conf_thresh)
+                scores = conf_scores[cl][c_mask]
+                if scores.size(0) == 0:
+                    continue
+                l_mask = c_mask.unsqueeze(1).expand_as(decoded_boxes)
+                boxes = decoded_boxes[l_mask].view(-1, 4)
+                # idx of highest scoring and non-overlapping boxes per class
+                ids, count = nms(boxes, scores, self.nms_thresh, self.top_k)
+                output[i, cl, :count] = \
+                    torch.cat((scores[ids[:count]].unsqueeze(1),
+                               boxes[ids[:count]]), 1)
+        flt = output.contiguous().view(num, -1, 5)
+        _, idx = flt[:, :, 0].sort(1, descending=True)
+        _, rank = idx.sort(1)
+        flt[(rank < self.top_k).unsqueeze(-1).expand_as(flt)].fill_(0)
+        return output.cuda()
 
 
 if __name__ == "__main__":
-    x = torch.randn(2, 3, 512, 512).to("cuda")
-    #print(cfg)
-    ssd = SSD(cfg, connect_loc_to_conf=True, in_channel=384, incep_conf=True, incep_loc=True).to("cuda")
+    import time
+    tmp = torch.randn(1, 3, 128, 128).to("cuda")
+    x = torch.randn(2, 3, 768, 768).to("cuda")
+    ssd = SSD(cfg, connect_loc_to_conf=True, incep_conf=True, incep_loc=True).to("cuda")
+
+    # Warm up
+    _ = ssd(tmp)
+
+    start = time.time()
     loc, conf, prior = ssd(x, verbose=True)
     print(loc.shape)
     print(conf.shape)
     print(prior.shape)
+    print("Calculation cost: %s seconds"%(time.time() - start))
