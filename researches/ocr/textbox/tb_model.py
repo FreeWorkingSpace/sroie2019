@@ -43,7 +43,7 @@ cfg = {
     'alpha': 1,
     'alpha_updater': 1,
     # Jaccard Distance Threshold
-    'overlap_thresh': 0.45,
+    'overlap_thresh': 0.5,
     # Whether to constrain the prior boxes inside the image
     'clip': True,
 }
