@@ -138,10 +138,10 @@ class SSD(nn.Module):
             padding=[3, 0], dilation=[3, 1], batch_norm=self.batch_norm))
         if incep_loc:
             loc_layer.append(omth_blocks.InceptionBlock(in_channel,
-                filters=[[128, 128, in_wid], [128, 128, in_wid], [128, 128, in_wid], [192, in_wid]],
-                kernel_sizes=[[[1, 7], 3, 1], [[1, 5], 3, 1], [[1, 3], 3, 1], [3, 1]],
-                stride=[[1, 1, 1], [1, 1, 1], [1, 1, 1], [1, 1]],
-                padding=[[[0, 3], 1, 0], [[0, 2], 1, 0], [[0, 1], 1, 0], [1, 0]],
+                filters=[[128, 128, 128, in_wid], [128, 128, 128, in_wid], [128, 128, in_wid], [192, 192, 128, in_wid]],
+                kernel_sizes=[[[1, 9], [1, 5], 3, 1], [[1, 7], [1, 3], 3, 1], [[1, 5], 3, 1], [[1, 3], [3, 1], 3, 1]],
+                stride=[[1, 1, 1, 1], [1, 1, 1, 1], [1, 1, 1], [1, 1, 1, 1]],
+                padding=[[[0, 4], [0, 2], 1, 0], [[0, 3], [0, 1], 1, 0], [[0, 2], 1, 0], [[0, 1], [1, 0], 1, 0]],
                 batch_norm=None, inner_maxout=None)
             )
         input_channel = in_wid * 4 if incep_loc else in_channel
