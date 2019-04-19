@@ -274,10 +274,10 @@ class SSD(nn.Module):
         confidences = torch.cat(confidences, dim=1)
         if is_train:
             #output = [locations, confidences, self.prior]
-            return locations, confidences, self.prior
+            return [locations, confidences, self.prior]
         else:
             #output = self.detect(locations, self.softmax(confidences), self.prior)
-            return locations, self.softmax(confidences), self.prior
+            return [locations, self.softmax(confidences), self.prior]
         #return output
 
 
@@ -298,7 +298,7 @@ class Detect(Function):
         self.conf_thresh = conf_thresh
         self.variance = cfg['variance']
 
-    def forward(self, out):
+    def forward(self, loc_data, conf_data, prior_data):
         """
         Args:
             loc_data: (tensor) Loc preds from loc layers
@@ -308,7 +308,6 @@ class Detect(Function):
             prior_data: (tensor) Prior boxes and variances from priorbox layers
                 Shape: [1,num_priors,4]
         """
-        loc_data, conf_data, prior_data = out
         num = loc_data.size(0)  # batch size
         num_priors = prior_data.size(0)
         output = torch.zeros(num, self.num_classes, self.top_k, 5)
