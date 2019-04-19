@@ -121,7 +121,7 @@ class SSD(nn.Module):
         self.conf_concate = nn.ModuleList([])
         self.conv_module_name = []
         self.softmax = nn.Softmax(dim=-1)
-        self.detect = Detect(self.num_classes, 0, 1500, 0.01, nms_thres)
+        self.detect = Detect(self.num_classes, 0, 1600, 0.01, nms_thres)
         self.connect_loc_to_conf = connect_loc_to_conf
         self.fix_size = fix_size
         if fix_size:
