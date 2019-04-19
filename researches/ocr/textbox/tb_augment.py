@@ -17,7 +17,7 @@ def aug_sroie(stretch_x=0, stretch_y=0, bg_color=255):
     # In case the width is not enough, pad it to stage_2 x stage_2
     aug_list.append(augmenters.PadToFixedSize(width=stage_2, height=stage_2, pad_cval=bg_color))
     # Resize to stage_3 x stage_3
-    aug_list.append(augmenters.Resize(size={"height": stage_3, "width": stage_3}))
+    #aug_list.append(augmenters.Resize(size={"height": stage_3, "width": stage_3}))
     # Perform Flip
     aug_list.append(augmenters.Fliplr(0.33, name="horizontal_flip"))
     aug_list.append(augmenters.Flipud(0.33, name="vertical_flip"))
