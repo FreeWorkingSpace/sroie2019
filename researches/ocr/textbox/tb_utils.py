@@ -5,6 +5,14 @@
 import torch
 import torch.nn.functional as F
 
+
+def calibrate_prior(x):
+    mul = 0.7
+    trans = 1
+    t = x + 2 / x
+    y = 2 / (torch.sqrt(torch.tanh(mul * (t + trans)) + (mul * (t + trans)))) + x / 150
+    return y
+
 def calculate_anchor_number(cfg, i):
     return len(cfg['box_ratios'][i]) + (0, len(cfg['box_ratios_large'][i]))[cfg['big_box']]
 
@@ -83,15 +91,39 @@ def jaccard(box_a, box_b):
         jaccard overlap: (tensor) Shape: [box_a.size(0), box_b.size(0)]
     """
     inter = intersect(box_a, box_b)
-    area_a = ((box_a[:, 2]-box_a[:, 0]) *
-              (box_a[:, 3]-box_a[:, 1])).unsqueeze(1).expand_as(inter)  # [A,B]
-    area_b = ((box_b[:, 2]-box_b[:, 0]) *
-              (box_b[:, 3]-box_b[:, 1])).unsqueeze(0).expand_as(inter)  # [A,B]
+    area_a = get_box_size(box_a).unsqueeze(1).expand_as(inter)  # [A,B]
+    area_b = get_box_size(box_b).unsqueeze(0).expand_as(inter)  # [A,B]
     jac = inter / (area_a + area_b - inter)
     return jac
+
+
+def super_wide_jaccard(targets, priors, img_ratio):
+    def mutate_sigmoid(x):
+        x = x / 5 - 2
+        y = 0.75 * x / (1 + torch.abs(x)) + 0.5
+        return y
+    targets = center_size(targets, img_ratio)
+    #targets[targets_ratio <= ratio_thres] = 0
+    targets = point_form(targets, img_ratio)
+    priors = point_form(priors, img_ratio)
+    inter = intersect(targets, priors)
+    prior_size = get_box_size(priors).unsqueeze(0).expand_as(inter)
+    targets_ratio = (targets[:, 2] / targets[:, 3]).unsqueeze(1).expand_as(inter)
+    prior_ratio = (priors[:, 2] / priors[:, 3]).unsqueeze(0).expand_as(inter)
+    ratio = targets_ratio / prior_ratio
+    # encourage the box with prior box's ratio is similar to target's ratio
+    ratio = 2 / (ratio + 1 / ratio)
+    # penelize the target without wide aspect ratio
+    targets_penelizer = mutate_sigmoid(targets_ratio)
+    
+    # Calculate the overlaps for super wide boxes
+    super_wide_jac = inter / prior_size * calibrate_prior(prior_ratio)
+    super_wide_overlaps = super_wide_jac * ratio * targets_penelizer
+    return super_wide_overlaps / 2
     
 
-def match(cfg, threshold, truths, priors, variances, labels, loc_t, conf_t, idx, ratios, visualize=False, jaccard=jaccard):
+def match(cfg, threshold, truths, priors, variances, labels, loc_t, conf_t, idx, img_ratio,
+          visualize=False, jaccard=jaccard):
     """Match each prior box with the ground truth box of the highest jaccard
     overlap, encode the bounding boxes, then return the matched indices
     corresponding to both confidence and location preds.
@@ -108,21 +140,14 @@ def match(cfg, threshold, truths, priors, variances, labels, loc_t, conf_t, idx,
     Return:
         The matched indices corresponding to 1)location and 2)confidence preds.
     """
-    def calibrate(x):
-        mul = 0.7
-        trans = 1
-        t = x + 2 / x
-        y = 2 / (torch.sqrt(torch.tanh(mul * (t + trans)) + (mul * (t + trans)))) + x / 150
-        return y
-
-    overlaps = box_jaccard(center_size(truths, 1), priors)
     if cfg['clip']:
-        overlaps = jaccard(truths, point_form(priors, ratios).clamp_(max=1, min=0))
+        overlaps = jaccard(truths, point_form(priors, img_ratio).clamp_(max=1, min=0))
     else:
-        overlaps = jaccard(truths, point_form(priors, ratios))
+        overlaps = jaccard(truths, point_form(priors, img_ratio))
     #overlaps = box_jaccard(center_size(truths, 1), priors)
-    prior_ratios = calibrate(priors[:, 2] / priors[:, 3]).unsqueeze(0).repeat(truths.size(0), 1)
+    prior_ratios = calibrate_prior(priors[:, 2] / priors[:, 3]).unsqueeze(0).repeat(truths.size(0), 1)
     overlaps = overlaps * prior_ratios
+    overlaps += super_wide_jaccard(truths, priors, img_ratio)
 
     # 找到与每个ground truth boxes最接近的prior boxes的IOU和index, length = num_gt
     best_prior_overlap, best_prior_idx = overlaps.max(1, keepdim=True)
