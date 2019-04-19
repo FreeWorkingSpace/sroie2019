@@ -110,15 +110,18 @@ def super_wide_jaccard(targets, priors, img_ratio):
     prior_size = get_box_size(priors).unsqueeze(0).expand_as(inter)
     targets_ratio = (targets[:, 2] / targets[:, 3]).unsqueeze(1).expand_as(inter)
     prior_ratio = (priors[:, 2] / priors[:, 3]).unsqueeze(0).expand_as(inter)
-    ratio = targets_ratio / prior_ratio
+
     # encourage the box with prior box's ratio is similar to target's ratio
-    ratio = 2 / (ratio + 1 / ratio)
+    #ratio = targets_ratio / prior_ratio
+    #ratio = 2 / (ratio + 1 / ratio)
+
     # penelize the target without wide aspect ratio
     targets_penelizer = mutate_sigmoid(targets_ratio)
     
     # Calculate the overlaps for super wide boxes
     super_wide_jac = inter / prior_size * calibrate_prior(prior_ratio)
-    super_wide_overlaps = super_wide_jac * ratio * targets_penelizer
+    super_wide_overlaps = super_wide_jac * targets_penelizer
+    #super_wide_overlaps = super_wide_jac * ratio * targets_penelizer
     return super_wide_overlaps / 2
     
 
@@ -147,7 +150,7 @@ def match(cfg, threshold, truths, priors, variances, labels, loc_t, conf_t, idx,
     #overlaps = box_jaccard(center_size(truths, 1), priors)
     prior_ratios = calibrate_prior(priors[:, 2] / priors[:, 3]).unsqueeze(0).repeat(truths.size(0), 1)
     overlaps = overlaps * prior_ratios
-    overlaps += super_wide_jaccard(truths, priors, img_ratio)
+    #overlaps += super_wide_jaccard(truths, priors, img_ratio)
 
     # 找到与每个ground truth boxes最接近的prior boxes的IOU和index, length = num_gt
     best_prior_overlap, best_prior_idx = overlaps.max(1, keepdim=True)
