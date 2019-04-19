@@ -49,24 +49,24 @@ def print_box(red_boxes=(), shape=0, green_boxes=(), blue_boxes=(), img=None, id
                                        edgecolor='r', facecolor='none', alpha=1)
         ax.add_patch(rect)
         if step_by_step_r:
-            step += 1
             plt.savefig(img_path + "_red_step_%s.jpg"%(str(step).zfill(4)))
+            step += 1
     for box in green_boxes:
         x1, y1, x2, y2 = coord_to_rect(box, h, w)
         rect = patches.Rectangle((x1, y1), x2, y2, linewidth=2,
                                        edgecolor='g', facecolor='none', alpha=0.4)
         ax.add_patch(rect)
         if step_by_step_g:
-            step += 1
             plt.savefig(img_path + "_green_step_%s.jpg" % (str(step).zfill(4)))
+            step += 1
     for box in blue_boxes:
         x1, y1, x2, y2 = coord_to_rect(box, h, w)
         rect = patches.Rectangle((x1, y1), x2, y2, linewidth=2,
                                        edgecolor='b', facecolor='none', alpha=0.4)
         ax.add_patch(rect)
         if step_by_step_b:
-            step += 1
             plt.savefig(img_path + "_blue_step_%s.jpg" % (str(step).zfill(4)))
+            step += 1
     if title:
         plt.title(title)
     plt.savefig(os.path.join(save_dir, img_name + ".jpg"))
