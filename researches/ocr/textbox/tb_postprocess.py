@@ -15,13 +15,36 @@ from researches.ocr.textbox.tb_vis import visualize_bbox, print_box
 from omni_torch.networks.optimizer.adabound import AdaBound
 import omni_torch.visualize.basic as vb
 
-def combine_boxes(prediction, w, h, y_thres=2, overlap_thres=0.0):
+def combine_boxes(prediction, w, h, y_thres=2, combine_thres=0.8, overlap_thres=0.0):
+    save_dir = os.path.expanduser("~/Pictures/")
+    #print_box(red_boxes=prediction, shape=(h, w), step_by_step_r=True, save_dir=save_dir)
     output_box = []
     _scale = torch.Tensor([w, h, w, h])
     if prediction.is_cuda:
-     _scale = _scale.cuda()
+        _scale = _scale.cuda()
     scale = _scale.unsqueeze(0).repeat(prediction.size(0), 1)
     prediction = prediction * scale
+
+    # Merge the boxes contained in other boxes
+    merged_boxes = []
+    unmerge_idx = torch.ones(prediction.size(0))
+    inter = intersect(prediction, prediction)
+    pred_size = get_box_size(prediction).unsqueeze(0).expand_as(inter)
+    identity = torch.eye(inter.size(0)).cuda() if inter.is_cuda else torch.eye(inter.size(0))
+    #indicator = 2 / (inter / pred_size + pred_size / inter) - identity
+    indicator = (inter / pred_size - identity) > combine_thres
+    for idctr in indicator:
+        # eliminate the index of predicted boxes that need to be merged
+        unmerge_idx[idctr] = 0
+        idx = idctr.unsqueeze(0).expand_as(indicator)
+        # once a box is merged, it does not need tp be merged or calculated again
+        indicator[idx] = 0
+        merged_boxes.append(
+            torch.cat([torch.min(prediction[idctr][:, :2], dim=0)[0], torch.max(prediction[idctr][:, 2:], dim=0)[0]])
+        )
+    merged_boxes = torch.stack(merged_boxes, dim=0)
+    unmerged_boxes = prediction[unmerge_idx]
+    prediction = torch.cat([unmerged_boxes, merged_boxes], dim=0)
 
     # Find boxes with similar height
     vertical_height = (prediction[:, 3] - prediction[:, 1])
