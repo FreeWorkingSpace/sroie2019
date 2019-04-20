@@ -11,27 +11,6 @@ def GeneralPattern(args):
     args.normalize_img = True
     args.normalize_min = 0
     args.normalize_max = 300
-    
-    args.do_imgaug = False
-    # Affine Tranformation
-    args.do_affine = True
-    args.translation_x = (-0.0, 0.0)
-    args.translation_y = (-0.0, 0.0)
-    args.scale_x = (1.0, 1.2)
-    args.scale_y = (1.0, 1.2)
-    # Random Crop
-    args.do_crop_to_fix_size = False
-    # Random Flip
-    args.do_random_flip = False
-    # Random Color
-    args.do_random_brightness = False
-    # Random Noise
-    args.do_random_noise = False
-    # Size
-    args.to_final_size = False
-    args.final_size = (32, 32)
-    args.standardize_size = False
-    args.resize_gcd = 8
 
     args.img_mean = (0.5, 0.5, 0.5)
     args.img_std = (1.0, 1.0, 1.0)
@@ -39,7 +18,7 @@ def GeneralPattern(args):
     return args
 
 def Unique_Patterns(args):
-    args.training_sources = ["receipts"]
+    args.training_sources = ["SROIE2019_OCR_0"]
     args.val_sources = ["open_cor"]
     args.epoches_per_phase = 1
     args.load_samples = -1
@@ -57,8 +36,19 @@ def Unique_Patterns(args):
     args.teacher_forcing_ratio_decay = 0.95
     # Load Image
     args.stretch_img = True
-    args.label_dict = {'.': 0, '9': 1, ',': 2, '¥': 3, '6': 4, '4': 5, '3': 6, '〒': 7, '7': 8, '1': 9, '2': 10, '0': 11,
-                       '-': 12, '8': 13, '5': 14, '': 15, "/": 16, "(": 17, ")": 18, '|': 15, ' ':15, 'SOS': 19, "EOS": 20}
+    args.label_dict = {'SOS': 0, ' ': 1, '!': 2, '"': 3, '#': 4, '$': 5, '%': 6, '&': 7,
+                       "'": 8, '(': 9, ')': 10, '*': 11, '+': 12, ',': 13, '-': 14, '.': 15, '/':16,
+                       '0': 17, '1': 18, '2': 19, '3': 20, '4': 21, '5': 22, '6': 23,  '7': 24,
+                       '8': 25, '9': 26, ':': 27, ';': 28, '<': 29, '=': 30, '>': 31, '?': 32,
+                       '@': 33, 'A': 34, 'B': 35, 'C': 36, 'D': 37, 'E': 38, 'F': 39, 'G': 40,
+                       'H': 41, 'I': 42, 'J': 43, 'K': 44, 'L': 45, 'M': 46, 'N': 47, 'O': 48,
+                       'P': 49, 'Q': 50, 'R': 51, 'S': 52, 'T': 53, 'U': 54, 'V': 55, 'W': 56,
+                       'X': 57, 'Y': 58, 'Z': 59, '[': 60, '\\': 61, ']': 62, '^': 63, '_': 64,
+                       '`': 65, 'a': 66, 'b': 67, 'c': 68, 'd': 69, 'e': 70, 'f': 71, 'g': 72,
+                       'h': 73, 'i': 74, 'j': 75, 'k': 76, 'l': 77, 'm': 78, 'n': 79, 'o': 80,
+                       'p': 81, 'q': 82, 'r': 83, 's': 84, 't': 85, 'u': 86, 'v': 87, 'w': 88,
+                       'x': 89, 'y': 90, 'z': 91, '{': 92, '|': 93, '}': 94, '~': 95, '·': 96,
+                       'EOS': 97}
     args.output_size = len(set([args.label_dict[key] for key in args.label_dict.keys()]))
     return args
 
