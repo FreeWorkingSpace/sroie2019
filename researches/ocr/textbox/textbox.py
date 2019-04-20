@@ -213,11 +213,10 @@ def main():
               (idx + 1, len(datasets)))
         net = model.SSD(cfg, connect_loc_to_conf=True, fix_size=args.fix_size,
                         incep_conf=True, incep_loc=True, nms_thres=args.nms_threshold)
-        net = torch.nn.DataParallel(net)
+        net = torch.nn.DataParallel(net).cuda()
         detector = model.Detect(num_classes=2, bkg_label=0, top_k=1500, conf_thresh=0.05, nms_thresh=0.3)
         # Input dimension of bbox is different in each step
         torch.backends.cudnn.benchmark = True
-        net = net.cuda()
         if args.fix_size:
             net.module.prior = net.module.prior.cuda()
         if args.finetune:

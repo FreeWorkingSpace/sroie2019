@@ -15,6 +15,7 @@ from researches.ocr.textbox.tb_vis import visualize_bbox, print_box
 from omni_torch.networks.optimizer.adabound import AdaBound
 import omni_torch.visualize.basic as vb
 
+
 def combine_boxes(prediction, w, h, h_thres_pct = 1.5, y_thres_pct=1, combine_thres=0.7,
                   overlap_thres=0.0, verbose=False):
     save_dir = os.path.expanduser("~/Pictures/")
@@ -25,6 +26,9 @@ def combine_boxes(prediction, w, h, h_thres_pct = 1.5, y_thres_pct=1, combine_th
         _scale = _scale.cuda()
     scale = _scale.unsqueeze(0).repeat(prediction.size(0), 1)
     prediction = prediction * scale
+    
+    # Eliminate White Boxes
+    
 
     # Merge the boxes contained in other boxes
     merged_boxes = []

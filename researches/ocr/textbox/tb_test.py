@@ -11,6 +11,7 @@ import researches.ocr.textbox.tb_model as model
 from researches.ocr.textbox.tb_utils import *
 from researches.ocr.textbox.tb_preprocess import *
 from researches.ocr.textbox.tb_augment import *
+from researches.ocr.textbox.tb_postprocess import combine_boxes
 from researches.ocr.textbox.tb_vis import visualize_bbox, print_box
 import omni_torch.visualize.basic as vb
 
@@ -23,6 +24,8 @@ dt = datetime.datetime.now().strftime("%Y-%m-%d_%H:%M")
 result_dir = os.path.join(args.path, args.code_name, "result")
 if not os.path.exists(result_dir):
     os.makedirs(result_dir)
+# Image will be resize to this size
+square = 2048
 
 
 def augment_back(transform_det, height_ori, width_ori, v_crop, h_crop):
@@ -53,11 +56,13 @@ def test_rotation():
                     incep_conf=True, incep_loc=True, nms_thres=args.nms_threshold)
     net = net.cuda()
     net_dict = net.state_dict()
-    weight_dict = util.load_latest_model(args, net, prefix="cv_1", return_state_dict=True)
+    weight_dict = util.load_latest_model(args, net, prefix="768", return_state_dict=True, nth=1)
     for key in weight_dict.keys():
         net_dict[key[7:]] = weight_dict[key]
     net.load_state_dict(net_dict)
     net.eval()
+    detector = model.Detect(num_classes=2, bkg_label=0, top_k=2000,
+                            conf_thresh=0.02, nms_thresh=0.3)
     
     # Enumerate test folder
     img_list = glob.glob(os.path.expanduser("~/Pictures/dataset/ocr/SROIE2019_test/*.jpg"))
@@ -83,7 +88,6 @@ def test_rotation():
         else:
             image = img
         # Resize the longer side to a certain length
-        square = 1536
         if height_ori >= width_ori:
             resize_aug =augmenters.Sequential([
                 augmenters.Resize(size={"height": square, "width": "keep-aspect-ratio"})])
@@ -106,10 +110,13 @@ def test_rotation():
         image_t = image_t.permute(0, 3, 1, 2).cuda()
         #visualize_bbox(args, cfg, image, [torch.Tensor(rot_coord).cuda()], net.prior, height_final/width_final)
         out = net(image_t, is_train=False)
+        loc_data, conf_data, prior_data = out
+        det_result = detector(loc_data, conf_data, prior_data)
 
         # Extract the predicted bboxes
-        idx = out.data[0, 1, :, 0] >= 0.1
-        text_boxes = out.data[0, 1, idx, 1:]
+        idx = det_result.data[0, 1, :, 0] >= 0.1
+        text_boxes = det_result.data[0, 1, idx, 1:]
+        text_boxes = combine_boxes(text_boxes, w=w_final, h=h_final)
         pred = [[float(coor) for coor in area] for area in text_boxes]
         BBox = [imgaug.imgaug.BoundingBox(box[0] * w_final, box[1] * h_final, box[2] * w_final, box[3] * h_final)
                 for box in pred]
