@@ -9,6 +9,7 @@ import researches.ocr.attention_ocr as init
 import researches.ocr.attention_ocr.aocr_data as data
 import researches.ocr.attention_ocr.aocr_presets as preset
 import researches.ocr.attention_ocr.aocr_models as att_model
+from omni_torch.networks.optimizer.adabound import AdaBound
 from researches.ocr.attention_ocr.aocr_augment import *
 
 
@@ -34,31 +35,32 @@ def fit(args, encoder, decoder, dataset, encode_optimizer, decode_optimizer, cri
         args.teacher_forcing_ratio *= args.teacher_forcing_ratio_decay
         start_time = time.time()
         for batch_idx, data in enumerate(dataset):
-            # Get data ops
+            # Prepare
+            loss = 0
+            attention = []
+            use_teacher_forcing = True if random.random() < args.teacher_forcing_ratio else False
+            
+            # Forward
             img_batch, label_batch = data[0][0].cuda(), data[0][1].cuda()
             encoder_outputs = encoder(img_batch)
-
-            decoder_input = torch.ones([img_batch.size(0), 1], dtype=torch.long, device=args.device) * 19
-            decoder_hidden = decoder.module.initHidden(img_batch.size(0))
-            loss = 0
-            use_teacher_forcing = True if random.random() < args.teacher_forcing_ratio else False
-            attention = []
-            if use_teacher_forcing:
-                for di in range(label_batch.size(1)):
-                    decoder_output, decoder_hidden, decoder_attention = decoder(
-                        decoder_input, decoder_hidden, encoder_outputs)
-                    attention.append(decoder_attention)
-                    loss += criterion(decoder_output, label_batch[:, di])
-                    decoder_input = label_batch[:, di].unsqueeze(-1)  # Teacher forcing
-            else:
-                # Without teacher forcing: use its own predictions as the next input
-                for di in range(label_batch.size(1)):
-                    decoder_output, decoder_hidden, decoder_attention = decoder(
-                        decoder_input, decoder_hidden, encoder_outputs)
-                    attention.append(decoder_attention)
-                    topv, topi = decoder_output.topk(1)
-                    loss += criterion(decoder_output, label_batch[:, di])
-                    decoder_input = topi.detach()  # detach from history as input
+            # Decoder input is default the index of SOS token
+            input = torch.zeros([img_batch.size(0), 1]).long().cuda()
+            hidden = decoder.module.initHidden(img_batch.size(0))
+            input = torch.zeros([encoder_outputs.size(0), 1]).long().cuda()
+            hidden = decoder.module.initHidden(img_batch.size(0))
+            decoder_outputs = []
+            for di in range(label_batch.size(1)):
+                out, hidden, decoder_attention = decoder(
+                    input, hidden, encoder_outputs)
+                attention.append(decoder_attention)
+                if use_teacher_forcing:
+                    input = label_batch[:, di].unsqueeze(-1)  # Teacher forcing
+                else:
+                    topv, topi = out.topk(1)
+                    input = topi.detach()  # detach from history as input
+                decoder_outputs.append(out)
+            # Backward
+            loss += criterion(out, label_batch[:, di])
             loss /= label_batch.size(1)
             if is_train:
                 encode_optimizer.zero_grad()
@@ -82,10 +84,9 @@ def visualize_attention(img_batch, label_batch, attention):
 
 
 def main():
-    aug = aug_aocr()
-    datasets = data.fetch_data(args, args.training_sources, batch_size=args.batch_size,
-                              batch_size_val=1, text_seperator=":", k_fold=1, split_val=0.1,
-                              pre_process=None, aug=aug)
+    aug = aug_aocr(args)
+    datasets = data.fetch_data(args, args.training_sources, batch_size=args.batch_size_per_gpu,
+                              batch_size_val=1, k_fold=1, split_val=0.1, pre_process=None, aug=aug)
 
     for idx, (train_set, val_set) in enumerate(datasets):
         print("\n =============== Cross Validation: %s/%s ================ " %
@@ -93,6 +94,7 @@ def main():
         # Prepare Network
         encoder = att_model.Attn_CNN(args.img_channel, args.encoder_out_channel)
         decoder = att_model.AttnDecoder(args)
+        criterion = nn.NLLLoss()
         if args.finetune:
             encoder, decoder = util.load_latest_model(args, [encoder, decoder],
                                                       prefix=["encoder", "decoder"])
@@ -102,14 +104,15 @@ def main():
             decoder.apply(init.init_rnn).to(args.device).apply(init.init_others)
         encoder = torch.nn.DataParallel(encoder).cuda()
         decoder = torch.nn.DataParallel(decoder).cuda()
+        criterion = torch.nn.DataParallel(criterion).cuda()
         torch.backends.cudnn.benchmark = True
         
         # Prepare loss function and optimizer
-        criterion = nn.NLLLoss().to(args.device)
-        encoder_optimizer = torch.optim.Adam(encoder.parameters(), lr=args.learning_rate,
-                                             weight_decay=args.weight_decay, eps=args.adam_epsilon)
-        decoder_optimizer = torch.optim.Adam(decoder.parameters(), lr=args.learning_rate,
-                                             weight_decay=args.weight_decay, eps=args.adam_epsilon)
+        
+        encoder_optimizer = AdaBound(encoder.parameters(),
+                                     lr=args.learning_rate, weight_decay=args.weight_decay)
+        decoder_optimizer = AdaBound(decoder.parameters(),
+                                     lr=args.learning_rate, weight_decay=args.weight_decay)
 
         for epoch in range(args.epoch_num):
             fit(args, encoder, decoder, train_set, encoder_optimizer, decoder_optimizer, criterion, is_train=True)

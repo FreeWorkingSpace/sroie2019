@@ -1,11 +1,14 @@
 def GeneralPattern(args):
     args.path = "~/Pictures/dataset/ocr"
-    args.deterministic_train = True
+    args.code_name = "_attention"
+    args.deterministic_train = False
     args.learning_rate = 1e-4
-    args.adam_epsilon = 1e-7
-    args.batch_size = 64
+    args.batch_size_per_gpu = 32
     args.random_order_load = False
-    args.loading_threads = 4
+    args.loading_threads = 2
+    args.cover_exist = True
+    args.epoch_num = 5
+    args.finetune = False
 
     args.img_channel = 3
     args.normalize_img = True
@@ -19,7 +22,7 @@ def GeneralPattern(args):
 
 def Unique_Patterns(args):
     args.training_sources = ["SROIE2019_OCR_0"]
-    args.val_sources = ["open_cor"]
+    args.text_seperator = ":"
     args.epoches_per_phase = 1
     args.load_samples = -1
 
@@ -27,7 +30,7 @@ def Unique_Patterns(args):
     args.encoder_out_channel = 128
     args.decoder_bottleneck = 3840
     
-    args.resize_height = 32
+    args.resize_height = 48
     args.max_img_size = 720
     args.max_str_size = 50
     args.attn_length = 90
@@ -53,11 +56,6 @@ def Unique_Patterns(args):
     return args
 
 def Runtime_Patterns(args):
-    args.cover_exist = True
-    args.code_name = "_attention"
-    args.epoch_num = 5
-    args.gpu_id = "1"
-    args.finetune = False
     return args
 
 PRESET={

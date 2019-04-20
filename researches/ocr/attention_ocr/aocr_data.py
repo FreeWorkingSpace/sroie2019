@@ -61,17 +61,19 @@ def resize_height_and_pad_width(image, args, path, seed, size):
         image = cv2.resize(image, (args.max_img_size, args.resize_height))
     return image
 
-def fetch_data(args, sources, batch_size, batch_size_val, text_seperator=None, shuffle=False,
-               txt_file=None, split_val=0.0, k_fold=1, pre_process=None, aug=None):
-    if text_seperator is not None:
-        args.text_seperator = text_seperator
+def fetch_data(args, sources, batch_size, batch_size_val, shuffle=False, txt_file=None,
+               split_val=0.0, k_fold=1, pre_process=None, aug=None):
     if txt_file:
         read_source = txt_file
     else:
         read_source = [_ + "/label.txt" for _ in sources]
     args.loading_threads = round(args.loading_threads * torch.cuda.device_count())
+    batch_size = batch_size * torch.cuda.device_count()
     if batch_size_val is None:
         batch_size_val = batch_size
+    else:
+        batch_size_val * torch.cuda.device_count()
+    
     dataset = []
     for i, source in enumerate(sources):
         subset = Arbitrary_Dataset(args, sources=[read_source[i]], step_1=[get_path_and_label],
@@ -79,26 +81,6 @@ def fetch_data(args, sources, batch_size, batch_size_val, text_seperator=None, s
                                    pre_process=[pre_process], augmentation=[aug])
         subset.prepare()
         dataset.append(subset)
-
-    """
-    workers = args.loading_threads
-    samples = sum([len(d) for d in dataset]) - 1
-    kwargs = {'num_workers': workers, 'pin_memory': pin_memory} if torch.cuda.is_available() else {}
-    if split_val > 0.0:
-        train_index = random.sample(range(samples), samples - int(samples * split_val))
-        val_index = random.sample(range(samples), int(samples * split_val))
-        train_sampler = sampler.SubsetRandomSampler(train_index)
-        validation_sampler = sampler.SubsetRandomSampler(val_index)
-        train_set = DataLoader(ConcatDataset(dataset), batch_size=batch_size,
-                                                shuffle=shuffle, sampler=train_sampler, **kwargs)
-        val_set = DataLoader(ConcatDataset(dataset), batch_size=batch_size,
-                                              shuffle=shuffle, sampler=validation_sampler, **kwargs)
-        return train_set, val_set
-    else:
-        train_set = DataLoader(ConcatDataset(dataset), batch_size=batch_size,
-                                                shuffle=shuffle, **kwargs)
-        return train_set
-    """
         
     if k_fold > 1:
         return util.k_fold_cross_validation(args, dataset, batch_size, batch_size_val, k_fold)
