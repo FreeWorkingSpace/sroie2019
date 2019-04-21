@@ -66,7 +66,6 @@ class AttnDecoder(nn.Module):
         self.inner_cnn = Decoder_Inner_CNN(args)
         self.gru = nn.GRU(self.hidden_size, self.hidden_size, num_layers=self.rnn_layers)
         self.out = nn.Linear(self.hidden_size, self.output_size)
-        #self.hidden = self.initHidden(args.batch_size_per_gpu)
     
     def _forward(self, encoder_outputs, label_batch, verbose=False):
         # Init
@@ -101,22 +100,23 @@ class AttnDecoder(nn.Module):
                 input = topi.detach()  # detach from history as input
         return decoder_outputs, decoder_attns
     
-    def forward(self, input, hidden, encoder_outputs, verbose=False):
-        #self.gru.flatten_parameters()
+    def forward(self, input, encoder_outputs, verbose=False):
+        self.gru.flatten_parameters()
+        idx = encoder_outputs.device.index
         embedded = self.dropout(self.embedding(input)).permute(1, 0, 2)
-        attn_weights = F.softmax(
-            self.attn(torch.cat((embedded.squeeze(), hidden.squeeze()), 1)), dim=1)
+        attn_weights = F.softmax(self.attn(torch.cat(
+            (embedded.squeeze(), self.hidden[idx].squeeze()), 1)), dim=1)
         encoder_outputs = torch.mul(encoder_outputs, attn_weights.unsqueeze(1).unsqueeze(1) \
                                     .repeat(1, encoder_outputs.size(1), encoder_outputs.size(2), 1))
         output = self.inner_cnn(encoder_outputs, embedded.squeeze())
-        output, hidden = self.gru(output, hidden)
+        output, self.hidden[idx] = self.gru(output, self.hidden[idx])
         output = F.log_softmax(self.out(output[0]), dim=1)
         if verbose:
             print("Decoder input with shape: %s." % str(input.shape))
             print("Decoder hidden with shape: %s." % str(hidden.shape))
             print("Decoder output shape: %s" % str(output.shape))
             print("Decoder attention shape: %s" % str(attn_weights.shape))
-        return output, hidden, attn_weights
+        return output, attn_weights
     
     def initHidden(self, batch_size):
         if batch_size % torch.cuda.device_count() != 0:
@@ -124,7 +124,7 @@ class AttnDecoder(nn.Module):
                                % (batch_size, torch.cuda.device_count()))
         #batch_size = int(batch_size / torch.cuda.device_count())
         # each dimension means layer_number, batch_size, hidden_size
-        return torch.zeros(self.rnn_layers, batch_size, self.hidden_size).cuda()
+        return torch.zeros(self.rnn_layers, batch_size, self.hidden_size)
     
 
 class Attn_Seq2Seq(nn.Module):
@@ -175,8 +175,11 @@ if __name__ == "__main__":
     
     encoder = Attn_CNN(args.img_channel, args.encoder_out_channel)
     decoder = AttnDecoder(args)
-    encoder = torch.nn.DataParallel(encoder, device_ids=[0, 1]).cuda()
-    decoder = torch.nn.DataParallel(decoder, device_ids=[0, 1]).cuda()
+    encoder = torch.nn.DataParallel(encoder).cuda()
+    decoder = torch.nn.DataParallel(decoder).cuda()
+    decoder.module.hidden = torch.cuda.comm.broadcast(
+        decoder.module.initHidden(64).cuda(), list(range(torch.cuda.device_count()))
+    )
     criterion = nn.NLLLoss()
     
     encoder_outputs = encoder(img_batch)

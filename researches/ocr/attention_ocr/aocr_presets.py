@@ -3,7 +3,7 @@ def GeneralPattern(args):
     args.code_name = "_attention"
     args.deterministic_train = False
     args.learning_rate = 1e-4
-    args.batch_size_per_gpu = 32
+    args.batch_size_per_gpu = 64
     args.random_order_load = False
     args.loading_threads = 2
     args.cover_exist = True

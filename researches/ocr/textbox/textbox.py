@@ -202,9 +202,8 @@ def main():
         aug = aug_sroie_dynamic_2()
         args.batch_size_per_gpu = 1
     datasets = data.fetch_detection_data(args, sources=args.train_sources, k_fold=1,
-                                         batch_size=args.batch_size_per_gpu * torch.cuda.device_count(),
-                                         batch_size_val=1, auxiliary_info=args.train_aux, split_val=0.1,
-                                         pre_process=None, aug=aug)
+                                         batch_size=args.batch_size_per_gpu, batch_size_val=1,
+                                         auxiliary_info=args.train_aux, split_val=0.1, aug=aug)
     model_prefix = "768"
     for idx, (train_set, val_set) in enumerate(datasets):
         loc_loss, conf_loss = [], []

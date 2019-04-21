@@ -86,8 +86,11 @@ def detection_collector(batch):
 def fetch_detection_data(args, sources, auxiliary_info, batch_size, batch_size_val=None,
                          shuffle=True, split_val=0.0, k_fold=1, pre_process=None, aug=None):
     args.loading_threads = round(args.loading_threads * torch.cuda.device_count())
+    batch_size = batch_size * torch.cuda.device_count()
     if batch_size_val is None:
         batch_size_val = batch_size
+    else:
+        batch_size_val * torch.cuda.device_count()
     dataset = []
     for i, source in enumerate(sources):
         subset = Arbitrary_Dataset(args, sources=[source], step_1=[get_path_and_label],
