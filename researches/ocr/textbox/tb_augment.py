@@ -9,9 +9,9 @@ def aug_sroie(stretch_x=0, stretch_y=0, bg_color=255):
     # so that the font size could be increased for most cases.
     aug_list.append(augmenters.Resize(size={"height": stage_1, "width": "keep-aspect-ratio"}))
     # increase the aspect ratio
-    aug_list.append(augmenters.Affine(
-        scale={"x": (1 - stretch_y, 1.0 + stretch_x), "y": (1.0 - stretch_x, 1 + stretch_y)}, cval=bg_color)
-    )
+    aug_list.append(augmenters.Sometimes(0.5,
+        augmenters.Affine(scale=(1, 1.5))
+    ))
     # Crop a stage_2 x stage_2 area
     aug_list.append(augmenters.CropToFixedSize(width=stage_2, height=stage_2))
     # In case the width is not enough, pad it to stage_2 x stage_2

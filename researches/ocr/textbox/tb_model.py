@@ -26,12 +26,14 @@ cfg = {
     # 'box_height': [[16], [26], [36]],
     # 'box_height': [[10, 16], [26], [36]],
     # 'box_height': [[16], [26], []],
-    'box_height': [[18], [30], [46]],
-    'box_ratios': [[2, 4, 7, 11, 15, 20, 26], [0.5, 1, 2, 5, 9, 13, 16, 18, 20], [1, 2, 5, 8, 10, 12, 15]],
+    'box_height': [[18], [30], [46], [68], [98]],
+    'box_ratios': [[2, 4, 7, 11, 15, 20, 26], [0.5, 1, 2, 5, 9, 13, 16, 18, 20],
+                   [1, 2, 5, 8, 10, 12, 15], [1, 2, 3, 5, 8, 11], [1, 2, 3, 4]],
     # If big_box is True, then box_height_large and box_ratios_large will be used
     'big_box': True,
-    'box_height_large': [[24], [38], [54]],
-    'box_ratios_large': [[1, 2, 4, 7, 11, 15, 20], [0.5, 1, 3, 6, 9, 11, 13, 15, 17], [1, 2, 4, 7, 9, 11, 14]],
+    'box_height_large': [[24], [38], [56], [82], [116]],
+    'box_ratios_large': [[1, 2, 4, 7, 11, 15, 20], [0.5, 1, 3, 6, 9, 11, 13, 15, 17],
+                         [1, 2, 4, 7, 9, 11, 14], [1, 2, 3, 5, 7, 9], [1, 2, 3, 4]],
     # You can increase the stride when feature_map_size is large
     # especially at swallow conv layers, so as not to create lots of prior boxes
     'stride': [1, 1, 1],
@@ -129,6 +131,12 @@ class SSD(nn.Module):
                                                        dilation=[3, 1], batch_norm=nn.BatchNorm2d))
         self.conv_module_name.append("extra_2")
         self.conv_module.append(omth_blocks.conv_block(512, [256, 512], kernel_sizes=[1, 3],
+                                                       stride=[1, 2], padding=[0, 1], batch_norm=nn.BatchNorm2d))
+        self.conv_module_name.append("extra_3")
+        self.conv_module.append(omth_blocks.conv_block(512, [256, 256], kernel_sizes=[1, 3],
+                                                       stride=[1, 2], padding=[0, 1], batch_norm=nn.BatchNorm2d))
+        self.conv_module_name.append("extra_4")
+        self.conv_module.append(omth_blocks.conv_block(256, [256, 256], kernel_sizes=[1, 3],
                                                        stride=[1, 2], padding=[0, 1], batch_norm=nn.BatchNorm2d))
 
     def create_loc_layer(self, in_channel, anchor, stride, incep_loc=False, in_wid=128):
