@@ -1,6 +1,6 @@
 from imgaug import augmenters
 
-def aug_sroie(stretch_x=0, stretch_y=0, bg_color=255):
+def aug_sroie(args, bg_color=255):
     aug_list = []
     stage_0, stage_1, stage_2, stage_3 = 1536, 2048, 768, 512
     # Pad the height to stage_0
@@ -9,8 +9,8 @@ def aug_sroie(stretch_x=0, stretch_y=0, bg_color=255):
     # so that the font size could be increased for most cases.
     aug_list.append(augmenters.Resize(size={"height": stage_1, "width": "keep-aspect-ratio"}))
     # increase the aspect ratio
-    aug_list.append(augmenters.Sometimes(0.5,
-        augmenters.Affine(scale=(1, 1.5))
+    aug_list.append(augmenters.Sometimes(args.augment_zoom_probability,
+        augmenters.Affine(scale=(args.augment_zoom_lower_bound, args.augment_zoom_higher_bound))
     ))
     # Crop a stage_2 x stage_2 area
     aug_list.append(augmenters.CropToFixedSize(width=stage_2, height=stage_2))

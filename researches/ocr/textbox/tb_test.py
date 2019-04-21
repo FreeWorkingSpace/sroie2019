@@ -50,13 +50,13 @@ def augment_back(transform_det, height_ori, width_ori, v_crop, h_crop):
     return aug
 
 
-def test_rotation():
+def test_rotation(nth):
     # Load Model
     net = model.SSD(cfg, connect_loc_to_conf=True, fix_size=False,
                     incep_conf=True, incep_loc=True, nms_thres=args.nms_threshold)
     net = net.cuda()
     net_dict = net.state_dict()
-    weight_dict = util.load_latest_model(args, net, prefix="768", return_state_dict=True, nth=1)
+    weight_dict = util.load_latest_model(args, net, prefix="768", return_state_dict=True, nth=nth)
     for key in weight_dict.keys():
         net_dict[key[7:]] = weight_dict[key]
     net.load_state_dict(net_dict)

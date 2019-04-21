@@ -11,6 +11,7 @@ from researches.ocr.textbox.tb_loss import MultiBoxLoss
 from researches.ocr.textbox.tb_utils import *
 from researches.ocr.textbox.tb_preprocess import *
 from researches.ocr.textbox.tb_augment import *
+from researches.ocr.textbox.tb_args import *
 from researches.ocr.textbox.tb_postprocess import combine_boxes
 from researches.ocr.textbox.tb_vis import visualize_bbox, print_box
 from omni_torch.networks.optimizer.adabound import AdaBound
@@ -18,8 +19,12 @@ import omni_torch.visualize.basic as vb
 
 PIC = os.path.expanduser("~/Pictures/")
 TMPJPG = os.path.expanduser("~/Pictures/tmp.jpg")
+opt = parse_arguments()
+edict = util.get_args(preset.PRESET)
+args = util.cover_edict_with_argparse(opt, edict)
 cfg = model.cfg
-args = util.get_args(preset.PRESET)
+cfg['super_wide'] = args.cfg_super_wide
+cfg['super_wide_coeff'] = args.cfg_super_wide_coeff
 if not torch.cuda.is_available():
     raise RuntimeError("Need cuda devices")
 dt = datetime.datetime.now().strftime("%Y-%m-%d_%H:%M")
@@ -197,7 +202,7 @@ def measure(pred_boxes, gt_boxes, width, height):
 
 def main():
     if args.fix_size:
-        aug = aug_sroie()
+        aug = aug_sroie(args)
     else:
         aug = aug_sroie_dynamic_2()
         args.batch_size_per_gpu = 1
@@ -219,7 +224,7 @@ def main():
         if args.fix_size:
             net.module.prior = net.module.prior.cuda()
         if args.finetune:
-            net = util.load_latest_model(args, net, prefix=model_prefix)
+            net = util.load_latest_model(args, net, prefix=args.model_prefix_finetune)
         # Using the latest optimizer, better than Adam and SGD
         optimizer = AdaBound(net.parameters(), lr=args.learning_rate, weight_decay=args.weight_decay,)
 
@@ -237,7 +242,7 @@ def main():
                 val_losses = [np.asarray(accuracy), np.asarray(precision),
                               np.asarray(recall), np.asarray(f1_score)]
             if epoch != 0 and epoch % 20 == 0:
-                util.save_model(args, args.curr_epoch, net.state_dict(), prefix=model_prefix,
+                util.save_model(args, args.curr_epoch, net.state_dict(), prefix=args.model_prefix,
                                 keep_latest=20)
             if epoch > 5:
                 # Train losses

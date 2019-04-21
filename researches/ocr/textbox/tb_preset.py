@@ -4,12 +4,13 @@ def GeneralPattern(args):
     args.code_name = "_text_detection"
     # Set it to True to make experiment result reproducible
     args.deterministic_train = False
+    args.cudnn_benchmark = False
     # Random seed for everything
     # If deterministic_train is disabled, then it will have no meaning
     args.seed = 1
     # Training Hyperparameter
     args.learning_rate = 1e-4
-    args.batch_size_per_gpu = 2
+    args.batch_size_per_gpu = 1
     args.loading_threads = 2
     args.img_channel = 3
     args.epoch_num = 2000
@@ -30,10 +31,15 @@ def Unique_Patterns(args):
     args.min_bbox_threshold = 0.01
     args.fix_size = True
     args.nms_threshold = 0.4
+    args.augment_zoom_probability = 0.4
+    args.augment_zoom_lower_bound = 1.3
+    args.augment_zoom_higher_bound = 1.7
     return args
 
 
 def Runtime_Patterns(args):
+    args.cfg_super_wide = False,
+    args.cfg_super_wide_coeff = 0.5,
     return args
 
 

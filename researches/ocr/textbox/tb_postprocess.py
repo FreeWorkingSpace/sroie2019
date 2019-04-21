@@ -28,7 +28,10 @@ def combine_boxes(prediction, w, h, h_thres_pct = 1.5, y_thres_pct=1, combine_th
     prediction = prediction * scale
     
     # Eliminate White Boxes
+    # Method 1: eliminate by color
     
+    
+    # Method 2: eliminate by histogram
 
     # Merge the boxes contained in other boxes
     merged_boxes = []

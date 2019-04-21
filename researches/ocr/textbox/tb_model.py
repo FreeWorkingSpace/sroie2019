@@ -15,8 +15,8 @@ cfg = {
     # As long as its length does not exceed the length of other value
     # e.g. feature_map_sizes, box_height, box_height_large
     # Then it will be OK
-    'conv_output': ["conv_4", "conv_5", "extra_2"],
-    'feature_map_sizes': [96, 48, 24],
+    'conv_output': ["conv_4", "conv_5", "extra_2", "extra_3", "extra_4"],
+    'feature_map_sizes': [96, 48, 24, 24, 24],
     # For static input size only, when Dynamic mode is turned out, it will not be used
     # Must be 2d list or tuple
     'input_img_size': [768, 768],
@@ -36,9 +36,9 @@ cfg = {
                          [1, 2, 4, 7, 9, 11, 14], [1, 2, 3, 5, 7, 9], [1, 2, 3, 4]],
     # You can increase the stride when feature_map_size is large
     # especially at swallow conv layers, so as not to create lots of prior boxes
-    'stride': [1, 1, 1],
+    'stride': [1, 1, 1, 1, 1],
     # Input depth for location and confidence layers
-    'loc_and_conf': [512, 512, 512],
+    'loc_and_conf': [512, 512, 512, 256, 256],
     # The hyperparameter to decide the Loss
     'variance': [0.1, 0.2],
     'var_updater': 1,
@@ -48,6 +48,8 @@ cfg = {
     'overlap_thresh': 0.45,
     # Whether to constrain the prior boxes inside the image
     'clip': True,
+    'super_wide': True,
+    'super_wide_coeff': 0.5,
 }
 
 
@@ -134,10 +136,10 @@ class SSD(nn.Module):
                                                        stride=[1, 2], padding=[0, 1], batch_norm=nn.BatchNorm2d))
         self.conv_module_name.append("extra_3")
         self.conv_module.append(omth_blocks.conv_block(512, [256, 256], kernel_sizes=[1, 3],
-                                                       stride=[1, 2], padding=[0, 1], batch_norm=nn.BatchNorm2d))
+                                                       stride=[1, 1], padding=[0, 1], batch_norm=nn.BatchNorm2d))
         self.conv_module_name.append("extra_4")
         self.conv_module.append(omth_blocks.conv_block(256, [256, 256], kernel_sizes=[1, 3],
-                                                       stride=[1, 2], padding=[0, 1], batch_norm=nn.BatchNorm2d))
+                                                       stride=[1, 1], padding=[0, 1], batch_norm=nn.BatchNorm2d))
 
     def create_loc_layer(self, in_channel, anchor, stride, incep_loc=False, in_wid=128):
         loc_layer = nn.ModuleList([])

@@ -1,53 +1,112 @@
 import argparse
 
-def initialize():
-    parser = argparse.ArgumentParser(description='Process some integers.')
-    parser.add_argument("--batch_per_gpu", type=int)
-    parser.add_argument("--loading_thread_per_gpu", type=int)
+def parse_arguments():
+    parser = argparse.ArgumentParser(description='Textbox Detector Settings')
+    ##############
+    #        TRAINING        #
+    ##############
+    parser.add_argument(
+        "-dt",
+        "--deterministic_train",
+        action="store_true",
+        help="if this is turned on, then everything will be deterministic"
+             "and the training process will be reproducible.",
+    )
+    parser.add_argument(
+        "-cdb",
+        "--cudnn_benchmark",
+        action="store_true",
+        help="Turn on CuDNN benchmark",
+    )
+    parser.add_argument(
+        "-en",
+        "--epoch_num",
+        type=int,
+        help="Epoch number of the training",
+        default=200
+    )
+    
+    parser.add_argument(
+        "-mp",
+        "--model_prefix",
+        type=str,
+        help="prefix of model",
+        required=True
+    )
+    parser.add_argument(
+        "-mpf",
+        "--model_prefix_finetune",
+        type=str,
+        help="prefix of existing model need to be finetuned",
+        required=True
+    )
+    parser.add_argument(
+        "-bpg",
+        "--batch_size_per_gpu",
+        type=int,
+        help="batch size inside each GPU during training",
+        default=1
+    )
+    parser.add_argument(
+        "-lt",
+        "--loading_threads",
+        type=int,
+        help="loading_threads correspond to each GPU during both training and validation, "
+             "e.g. You have 4 GPU and set -lt 2, so 8 threads will be used to load data",
+        default=2
+    )
+    parser.add_argument(
+        "-d",
+        "--datasets",
+        nargs='+',
+        help="a list folder/folders to use as training set",
+        default=["SROIE2019"]
+    )
 
+    ##############
+    #   AUGMENTATION   #
+    ##############
+    parser.add_argument(
+        "-azp",
+        "--augment_zoom_probability",
+        type=float,
+        help="Probability of zoom the input image",
+        default=0.5
+    )
+    parser.add_argument(
+        "-azlb",
+        "--augment_zoom_lower_bound",
+        type=float,
+        help="lower bound of zoom rate",
+        default=1.2
+    )
+    parser.add_argument(
+        "-azhb",
+        "--augment_zoom_higher_bound",
+        type=float,
+        help="higher bound of zoom rate",
+        default=1.6
+    )
 
-    #  --------------------------Model Architecture-------------------------------
-
-
-    # -------------------------------Training------------------------------------
-    parser.add_argument("--gpu_id", type=str, default="0",
-                             help="which gpu you want to use, multi-gpu is not supported here")
-    parser.add_argument("--epoch_num", type=int, default=2000,
-                             help="Total training epoch")
-    parser.add_argument("--deterministic_train", type=bool, default=False,
-                             help="Make the training reproducable")
-    parser.add_argument("--seed", type=int, default=88,
-                             help="If Deterministic train is allowed, this will be the random seed")
-
-    parser.add_argument("--batch_size", type=int, default=8)
-    parser.add_argument("--learning_rate", type=float, default=1e-4)
-    parser.add_argument("--weight_decay", type=float, default=1e-4)
-    parser.add_argument("--batch_norm", type=bool, default=True)
-    parser.add_argument("--finetune", type=bool, default=False)
-
-    # Models does not need to be specified unless you are going to use them
-    parser.add_argument("--model1", type=str, help="Model you want to choose")
-    parser.add_argument("--model2", type=str, help="Model you want to choose")
-    parser.add_argument("--model3", type=str, help="Model you want to choose")
-    parser.add_argument("--model4", type=str, help="Model you want to choose")
-    parser.add_argument("--model5", type=str, help="Model you want to choose")
-    parser.add_argument("--model6", type=str, help="Model you want to choose")
-
-    parser.add_argument("--general_options", type=str, help='general settings for a '
-                                                        'model that specifies the settings in the package [options]. '
-                                                        'It can be both number or path')
-    parser.add_argument("--unique_options", type=str, help="unique settings for a "
-                                                        "particular model that are useless to others. "
-                                                        "It can be both number or path")
-
-    # ------------------------------MISC-----------------------------------
-    parser.add_argument("--loading_threads", type=int, default=2,
-                             help="threads used to load data to cpu-memory")
-    parser.add_argument("--random_order_load", type=bool, default=False,
-                             help="ingore the correspondence of input and output data when load the dataset")
-    parser.add_argument("--path", type=str, help="the path of dataset")
-    parser.add_argument("--extensions", type=list,
-                             default = ["jpeg", "JPG", "jpg", "png", "PNG", "gif", "tiff"])
+    ##############
+    #          MODEL         #
+    ##############
+    parser.add_argument(
+        "-csw",
+        "--cfg_super_wide",
+        action="store_true",
+        help="allow match the small boxes inside the large box",
+    )
+    parser.add_argument(
+        "-cswc",
+        "--cfg_super_wide_coeff",
+        type=float,
+        help="to suppress or increase the matched super wide overlap"
+             "<1 means suppress, >1 means increase",
+        default=0.5
+    )
+    
+    
 
     args = parser.parse_args()
     return args
