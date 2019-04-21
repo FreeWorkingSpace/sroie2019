@@ -28,6 +28,7 @@ def parse_arguments():
              "e.g. You have 4 GPU and set -lt 2, so 8 threads will be used to load data",
         default=2
     )
+    
     parser.add_argument(
         "-d",
         "--datasets",
