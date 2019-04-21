@@ -6,4 +6,5 @@ opencv-python>=3.4.0
 scipy>=1.1.0
 matplotlib>=2.2.0
 pandas>=0.23.0
+distance>=0.1.3
 

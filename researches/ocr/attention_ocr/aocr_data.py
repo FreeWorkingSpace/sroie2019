@@ -11,8 +11,8 @@ def get_path_and_label(args, length, paths, foldername):
         output_path = []
         output_label = []
         for _, line in enumerate(txtfile):
-            #if _ in [7]:
-                #print("")
+            #if _ >= 1000:
+                #break
             splitted_line = line.strip().split(args.text_seperator)
             output, label = splitted_line[0], splitted_line[1]
             output_path.append(os.path.join(args.path, foldername, output))
@@ -72,7 +72,7 @@ def fetch_data(args, sources, batch_size, batch_size_val, shuffle=False, txt_fil
     if batch_size_val is None:
         batch_size_val = batch_size
     else:
-        batch_size_val * torch.cuda.device_count()
+        batch_size_val *= torch.cuda.device_count()
     
     dataset = []
     for i, source in enumerate(sources):
