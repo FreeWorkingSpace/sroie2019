@@ -55,7 +55,7 @@ def parse_arguments():
         "--max_str_size",
         type=int,
         help="label string will be pad/crop with EOS if its length is shorter/longer than this value",
-        default=45
+        default=50
     )
     
     ##############
@@ -77,7 +77,7 @@ def parse_arguments():
              "If the attn_length is L, then during each step, the model will implicitly divide"
              "the model into L pieces of [b, c, h, w/L] tensor, and assign different weight"
              "to them at each time step",
-        default=45
+        default=90
     )
     parser.add_argument(
         "-hs",
