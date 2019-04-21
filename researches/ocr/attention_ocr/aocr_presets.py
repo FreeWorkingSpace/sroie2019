@@ -4,6 +4,7 @@ def GeneralPattern(args):
     args.deterministic_train = False
     args.learning_rate = 1e-4
     args.batch_size_per_gpu = 32
+    args.batch_size_per_gpu_val = 32
     args.random_order_load = False
     args.loading_threads = 2
     args.cover_exist = True
@@ -21,10 +22,9 @@ def GeneralPattern(args):
     return args
 
 def Unique_Patterns(args):
-    args.training_sources = ["SROIE2019_OCR_0"]
+    args.datasets = ["SROIE2019_OCR_0"]
     args.text_seperator = ":"
     args.epoches_per_phase = 1
-    args.load_samples = -1
 
     args.decoder_rnn_layers = 1
     args.encoder_out_channel = 128
@@ -32,13 +32,11 @@ def Unique_Patterns(args):
     
     args.resize_height = 48
     args.max_img_size = 720
-    args.max_str_size = 50
-    args.attn_length = 90
+    args.max_str_size = 45
+    args.attn_length = 45
     args.hidden_size = 128
-    args.teacher_forcing_ratio = 0.05
+    args.teacher_forcing_ratio = 0.8
     args.teacher_forcing_ratio_decay = 0.95
-    # Load Image
-    args.stretch_img = True
     args.label_dict = {'SOS': 0, ' ': 1, '!': 2, '"': 3, '#': 4, '$': 5, '%': 6, '&': 7,
                        "'": 8, '(': 9, ')': 10, '*': 11, '+': 12, ',': 13, '-': 14, '.': 15, '/':16,
                        '0': 17, '1': 18, '2': 19, '3': 20, '4': 21, '5': 22, '6': 23,  '7': 24,

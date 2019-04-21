@@ -12,9 +12,12 @@ import researches.ocr.attention_ocr.aocr_models as att_model
 from omni_torch.networks.optimizer.adabound import AdaBound
 from researches.ocr.attention_ocr.aocr_augment import *
 from researches.ocr.attention_ocr.aocr_util import *
+from researches.ocr.attention_ocr.aocr_args import *
 
+opt = parse_arguments()
+edict = util.get_args(preset.PRESET)
+args = util.cover_edict_with_argparse(opt, edict)
 
-args = util.get_args(preset.PRESET)
 invert_dict = invert_dict(args.label_dict)
 if not torch.cuda.is_available():
     raise RuntimeError("Need cuda devices")
@@ -35,12 +38,12 @@ def fit(args, encoder, decoder, dataset, encode_optimizer, decode_optimizer, cri
         decoder.eval()
     Loss = []
     Lev_Dis, Str_Accu = [], []
+    decoder.module.teacher_forcing_ratio *= args.teacher_forcing_ratio_decay
     for epoch in range(args.epoches_per_phase):
         visualize = False
         if args.curr_epoch % 5 == 0 and epoch == 0:
             print("Visualizing prediction result at %d th epoch %d th iteration" % (args.curr_epoch, epoch))
             visualize = True
-        args.teacher_forcing_ratio *= args.teacher_forcing_ratio_decay
         start_time = time.time()
         for batch_idx, data in enumerate(dataset):
             img_batch, label_batch = data[0][0].cuda(), data[0][1].cuda()
@@ -99,8 +102,9 @@ def visualize_attention(img_batch, label_batch, attention):
 
 def main():
     aug = aug_aocr(args)
-    datasets = data.fetch_data(args, args.training_sources, batch_size=args.batch_size_per_gpu,
-                              batch_size_val=16, k_fold=1, split_val=0.1, pre_process=None, aug=aug)
+    datasets = data.fetch_data(args, args.datasets, batch_size=args.batch_size_per_gpu,
+                              batch_size_val=args.batch_size_per_gpu_val, k_fold=1, split_val=0.1,
+                               pre_process=None, aug=aug)
 
     for idx, (train_set, val_set) in enumerate(datasets):
         losses = []
