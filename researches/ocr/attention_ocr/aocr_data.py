@@ -32,11 +32,11 @@ def read_img_and_label(args, items, seed, size, pre_process, rand_aug, bbox_load
         # Characters in label exceed the maxium predictable string length(args.max_str_size)
         print("label in %s exceed max_str_size %s by %s"
               %(path, args.max_str_size - 2, len(label) - args.args.max_str_size + 2))
-        label = [19] + label[: args.max_str_size - 2] + [20]
+        label = [args.label_dict["SOS"]] + label[: args.max_str_size - 2] + [args.label_dict["EOS"]]
     else:
         # Pad the label using EOS token
-        label = [19] + label + [20] * (args.max_str_size - 2 - len(label)) + [20]
-    # [19] and [20] represent SOS token and EOS token respectively
+        label = [args.label_dict["SOS"]] + label + \
+                [args.label_dict["EOS"]] * (args.max_str_size - 1 - len(label))
     return img_tensor, omth_loader.just_return_it(args, label, seed, size).long()
 
 def resize_height_and_pad_width(image, args, path, seed, size):

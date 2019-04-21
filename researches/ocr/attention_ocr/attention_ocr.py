@@ -36,31 +36,26 @@ def fit(args, encoder, decoder, dataset, encode_optimizer, decode_optimizer, cri
         start_time = time.time()
         for batch_idx, data in enumerate(dataset):
             # Prepare
-            loss = 0
-            attention = []
             use_teacher_forcing = True if random.random() < args.teacher_forcing_ratio else False
             
             # Forward
             img_batch, label_batch = data[0][0].cuda(), data[0][1].cuda()
             encoder_outputs = encoder(img_batch)
             # Decoder input is default the index of SOS token
-            input = torch.zeros([img_batch.size(0), 1]).long().cuda()
-            hidden = decoder.module.initHidden(img_batch.size(0))
-            input = torch.zeros([encoder_outputs.size(0), 1]).long().cuda()
-            hidden = decoder.module.initHidden(img_batch.size(0))
-            decoder_outputs = []
+            input = torch.zeros([encoder_outputs.size(0), 1]).long().cuda() + args.label_dict["SOS"]
+            hidden = decoder.module.initHidden(encoder_outputs.size(0))
             for di in range(label_batch.size(1)):
-                out, hidden, decoder_attention = decoder(
-                    input, hidden, encoder_outputs)
-                attention.append(decoder_attention)
+                out, decoder_hidden, decoder_attention = decoder(
+                    decoder_input, decoder_hidden, encoder_outputs)
+                loss += criterion(out, label_batch[:, di])
+                #attention.append(decoder_attention)
                 if use_teacher_forcing:
-                    input = label_batch[:, di].unsqueeze(-1)  # Teacher forcing
+                    decoder_input = label_batch[:, di].unsqueeze(-1)  # Teacher forcing
                 else:
                     topv, topi = out.topk(1)
-                    input = topi.detach()  # detach from history as input
-                decoder_outputs.append(out)
+                    decoder_input = topi.detach()  # detach from history as input
+            
             # Backward
-            loss += criterion(out, label_batch[:, di])
             loss /= label_batch.size(1)
             if is_train:
                 encode_optimizer.zero_grad()
