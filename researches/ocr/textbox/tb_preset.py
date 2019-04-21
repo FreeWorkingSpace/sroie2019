@@ -40,6 +40,8 @@ def Unique_Patterns(args):
 def Runtime_Patterns(args):
     args.cfg_super_wide = False,
     args.cfg_super_wide_coeff = 0.5,
+    args.model_prefix_finetune = "768",
+    args.model_prefix = "768",
     return args
 
 

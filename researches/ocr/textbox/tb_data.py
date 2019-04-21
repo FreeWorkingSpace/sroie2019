@@ -13,8 +13,6 @@ def get_path_and_label(args, length, paths, auxiliary_info):
     img_files, txt_files = [], []
     path_list = sorted(glob.glob(paths+ "/*.%s"%(auxiliary_info["txt"])))
     for i, txt_file in enumerate(path_list):
-        if i > 32:
-            break
         img_name = txt_file[txt_file.rfind("/") + 1:-4]
         img_path = os.path.join(paths, img_name + ".%s" % (auxiliary_info["img"]))
         if not os.path.exists(img_path):

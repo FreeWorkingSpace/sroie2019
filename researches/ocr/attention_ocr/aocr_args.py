@@ -1,7 +1,7 @@
 import argparse
 
 def parse_arguments():
-    parser = argparse.ArgumentParser(description='Generate synthetic text data for text recognition.')
+    parser = argparse.ArgumentParser(description='Attention OCR settings')
 
     ##############
     #           DATA           #
