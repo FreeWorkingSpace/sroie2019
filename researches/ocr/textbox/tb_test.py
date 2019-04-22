@@ -20,9 +20,6 @@ args = util.get_args(preset.PRESET)
 if not torch.cuda.is_available():
     raise RuntimeError("Need cuda devices")
 dt = datetime.datetime.now().strftime("%Y-%m-%d_%H:%M")
-result_dir = os.path.join(args.path, args.code_name, "result")
-if not os.path.exists(result_dir):
-    os.makedirs(result_dir)
 # Image will be resize to this size
 square = 2048
 
@@ -109,6 +106,9 @@ def augment_back(transform_det, height_ori, width_ori, v_crop, h_crop):
 
 
 def test_rotation(opt):
+    result_dir = os.path.join(args.path, args.code_name, "result+" + "-".join(opt.model_prefix_list))
+    if not os.path.exists(result_dir):
+        os.makedirs(result_dir)
     # Load
     assert len(opt.model_prefix_list) <= torch.cuda.device_count(), \
         "number of models should not exceed the device numbers"
@@ -235,7 +235,7 @@ def test_rotation(opt):
         f.close()
         print("%d th image cost %.2f seconds"%(i, time.time() - start))
     os.chdir(os.path.join(args.path, args.code_name, "result"))
-    os.system("zip %s.zip ~/Pictures/dataset/ocr/_text_detection/result/*.txt"%("val+" + "-".join(opt.model_prefix_list)))
+    os.system("zip result_%s.zip ~/Pictures/dataset/ocr/_text_detection/result/*.txt"%("val+" + "-".join(opt.model_prefix_list)))
 
 
 if __name__ == "__main__":
