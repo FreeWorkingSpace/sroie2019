@@ -16,10 +16,12 @@ from omni_torch.networks.optimizer.adabound import AdaBound
 import omni_torch.visualize.basic as vb
 
 
-def combine_boxes(prediction, w, h, h_thres_pct = 1.5, y_thres_pct=1, combine_thres=0.7,
+def combine_boxes(prediction, img, h_thres_pct = 1.5, y_thres_pct=1, combine_thres=0.7,
                   overlap_thres=0.0, verbose=False):
     save_dir = os.path.expanduser("~/Pictures/")
     #print_box(red_boxes=prediction, shape=(h, w), step_by_step_r=True, save_dir=save_dir)
+    w = img.size(3)
+    h = img.size(2)
     output_box = []
     _scale = torch.Tensor([w, h, w, h])
     if prediction.is_cuda:
@@ -29,9 +31,25 @@ def combine_boxes(prediction, w, h, h_thres_pct = 1.5, y_thres_pct=1, combine_th
     
     # Eliminate White Boxes
     # Method 1: eliminate by color
-    
+    qualified_boxes=[]
+    for _, pred in enumerate(prediction):
+        cropped = img[:, :, int(pred[1]): int(pred[3]), int(pred[0]): int(pred[2])]
+        avg_value = 255 * (float(torch.sum(cropped) / cropped.nelement()) + 0.5)
+        if avg_value > 245:
+            continue
+            dt = datetime.datetime.now().strftime("%Y-%m-%d_%H:%M:%S")
+            std_black = int(torch.std(torch.histc((255 * (cropped + 0.5)).cpu(), bins=50, min=0, max=85)))
+            std_white = int(torch.std(torch.histc((255 * (cropped + 0.5)).cpu(), bins=50, min=170, max=255)))
+            vb.plot_tensor(None, cropped, margin=5, bg_color=128,
+                           path="/home/wang/Pictures/%d_%d_%d_%s_%d.jpg"%(round(avg_value), std_black, std_white, dt, _))
+        else:
+            #pass
+            qualified_boxes.append(pred)
+    prediction = torch.stack(qualified_boxes, dim=0)
     
     # Method 2: eliminate by histogram
+    # Eliminate by variance
+    #torch.histc(input, bins=100, min=0, max=0, out=None)
 
     # Merge the boxes contained in other boxes
     merged_boxes = []

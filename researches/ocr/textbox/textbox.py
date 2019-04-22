@@ -136,7 +136,7 @@ def evaluate(img, detections, targets, batch_idx, eval_thres, visualize=False, p
         if _boxes.size(0) == 0:
             print("No predicted box in this patch")
             break
-        boxes = combine_boxes(_boxes, w=w, h=h)
+        boxes = combine_boxes(_boxes, img=img)
         jac = jaccard(boxes, gt_boxes)
         overlap, idx = jac.max(1, keepdim=True)
         # This is not DetEval

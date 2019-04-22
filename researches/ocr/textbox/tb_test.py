@@ -44,7 +44,8 @@ def parse_arguments():
         "--model_prefix_list",
         nargs='+',
         help="a list of model prefix to do the ensemble",
-        default=["768"]
+        default=["ft_003_1"]
+        # this fit the current tb_model.py code: ["ft_0012_1"]
     )
     parser.add_argument(
         "-nth",
@@ -114,6 +115,9 @@ def test_rotation(opt):
         weight_dict = util.load_latest_model(args, net, prefix=prefix,
                                              return_state_dict=True, nth=opt.nth_best_model)
         loading_fail_signal = False
+        for i, key in enumerate(net_dict.keys()):
+            if "module." + key not in weight_dict:
+                net_dict[key] = torch.zeros(net_dict[key].shape)
         for key in weight_dict.keys():
             if key[7:] in net_dict:
                 if net_dict[key[7:]].shape == weight_dict[key].shape:
@@ -174,7 +178,7 @@ def test_rotation(opt):
         h_re, w_re = image.shape[0], image.shape[1]
         # Pad the image into a square image
         pad_aug = augmenters.Sequential(
-            augmenters.PadToFixedSize(width=square, height=square, pad_cval=255, position="center")
+            augmenters.PadToFixedSize(width=square, height=square, pad_cval=0, position="center")
         )
         pad_aug = pad_aug.to_deterministic()
         image = pad_aug.augment_image(image)
@@ -196,7 +200,7 @@ def test_rotation(opt):
             idx = det_result.data[0, 1, :, 0] >= 0.1
             text_boxes.append(det_result.data[0, 1, idx, 1:])
         text_boxes = torch.cat(text_boxes, dim=0)
-        text_boxes = combine_boxes(text_boxes, w=w_final, h=h_final)
+        text_boxes = combine_boxes(text_boxes, img=image_t)
         pred = [[float(coor) for coor in area] for area in text_boxes]
         BBox = [imgaug.imgaug.BoundingBox(box[0] * w_final, box[1] * h_final, box[2] * w_final, box[3] * h_final)
                 for box in pred]
@@ -211,6 +215,7 @@ def test_rotation(opt):
         f = open(os.path.join(result_dir, name + ".txt"), "w")
         for box in bbox.bounding_boxes:
             x1, y1, x2, y2 = int(round(box.x1)), int(round(box.y1)), int(round(box.x2)), int(round(box.y2))
+            #box_tensors.append(torch.tensor([x1, y1, x2, y2]))
             # 4-point to 8-point: x1, y1, x2, y1, x2, y2, x1, y2
             f.write("%d,%d,%d,%d,%d,%d,%d,%d\n"%(x1, y1, x2, y1, x2, y2, x1, y2))
             cv2.rectangle(img, (x1, y1), (x2, y2), (255, 105, 65), 2)
