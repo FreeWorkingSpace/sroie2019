@@ -33,6 +33,13 @@ def parse_arguments():
     #        TRAINING        #
     ##############
     parser.add_argument(
+        "-did",
+        "--device_id",
+        type=int,
+        help="1 represent the latest model",
+        default=0
+    )
+    parser.add_argument(
         "-tdr",
         "--test_dataset_root",
         type=str,
@@ -106,10 +113,10 @@ def test_rotation(opt):
     assert len(opt.model_prefix_list) <= torch.cuda.device_count(), \
         "number of models should not exceed the device numbers"
     nets = []
-    for device_id, prefix in enumerate(opt.model_prefix_list):
-
+    for _, prefix in enumerate(opt.model_prefix_list):
         net = model.SSD(cfg, connect_loc_to_conf=True, fix_size=False,
                         incep_conf=True, incep_loc=True)
+        device_id = opt.device_id if len(opt.model_prefix_list) == 1 else _
         net = net.to("cuda:%d"%(device_id))
         net_dict = net.state_dict()
         weight_dict = util.load_latest_model(args, net, prefix=prefix,
@@ -191,7 +198,8 @@ def test_rotation(opt):
         #visualize_bbox(args, cfg, image, [torch.Tensor(rot_coord).cuda()], net.prior, height_final/width_final)
 
         text_boxes = []
-        for device_id, net in enumerate(nets):
+        for _, net in enumerate(nets):
+            device_id = opt.device_id if len(nets) == 1 else _
             image_t = image_t.to("cuda:%d"%(device_id))
             out = net(image_t, is_train=False)
             loc_data, conf_data, prior_data = out
@@ -226,6 +234,8 @@ def test_rotation(opt):
         cv2.imwrite(os.path.join(img_save_directory, name + ".jpg"), img)
         f.close()
         print("%d th image cost %.2f seconds"%(i, time.time() - start))
+    os.chdir(os.path.join(args.path, args.code_name, "result"))
+    os.system("zip %s.zip ~/Pictures/dataset/ocr/_text_detection/result/*.txt"%("val+" + "-".join(opt.model_prefix_list)))
 
 
 if __name__ == "__main__":
