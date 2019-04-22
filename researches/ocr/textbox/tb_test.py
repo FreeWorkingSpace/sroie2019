@@ -64,14 +64,14 @@ def parse_arguments():
     parser.add_argument(
         "-dct",
         "--detector_conf_threshold",
-        type=int,
+        type=float,
         help="detector_conf_threshold",
         default=0.05
     )
     parser.add_argument(
         "-dnt",
         "--detector_nms_threshold",
-        type=int,
+        type=float,
         help="detector_nms_threshold",
         default=0.3
     )
