@@ -1,11 +1,10 @@
-import os, time, sys, math, random, glob, datetime
+import os, time, sys, math, random, glob, datetime, argparse
 sys.path.append(os.path.expanduser("~/Documents/sroie2019"))
 import cv2, torch
 import numpy as np
 import imgaug
 from imgaug import augmenters
 import omni_torch.utils as util
-import researches.ocr.textbox.tb_data as data
 import researches.ocr.textbox.tb_preset as preset
 import researches.ocr.textbox.tb_model as model
 from researches.ocr.textbox.tb_utils import *
@@ -27,7 +26,6 @@ if not os.path.exists(result_dir):
 # Image will be resize to this size
 square = 2048
 
-import argparse
 
 def parse_arguments():
     parser = argparse.ArgumentParser(description='Textbox Detector Settings')
@@ -35,11 +33,18 @@ def parse_arguments():
     #        TRAINING        #
     ##############
     parser.add_argument(
+        "-tdr",
+        "--test_dataset_root",
+        type=str,
+        help="1 represent the latest model",
+        default="~/Pictures/dataset/ocr/SROIE2019_test"
+    )
+    parser.add_argument(
         "-mpl",
         "--model_prefix_list",
         nargs='+',
         help="a list of model prefix to do the ensemble",
-        default=["768", "tb_0012"]
+        default=["768"]
     )
     parser.add_argument(
         "-nth",
@@ -47,6 +52,27 @@ def parse_arguments():
         type=int,
         help="1 represent the latest model",
         default=1
+    )
+    parser.add_argument(
+        "-dtk",
+        "--detector_top_k",
+        type=int,
+        help="get top_k boxes from prediction",
+        default=1500
+    )
+    parser.add_argument(
+        "-dct",
+        "--detector_conf_threshold",
+        type=int,
+        help="detector_conf_threshold",
+        default=0.05
+    )
+    parser.add_argument(
+        "-dnt",
+        "--detector_nms_threshold",
+        type=int,
+        help="detector_nms_threshold",
+        default=0.3
     )
     args = parser.parse_args()
     return args
@@ -74,22 +100,47 @@ def augment_back(transform_det, height_ori, width_ori, v_crop, h_crop):
     return aug
 
 
-def test_rotation(prefix, nth=1):
-    # Load Model
-    net = model.SSD(cfg, connect_loc_to_conf=True, fix_size=False,
-                    incep_conf=True, incep_loc=True, nms_thres=args.nms_threshold)
-    net = net.cuda()
-    net_dict = net.state_dict()
-    weight_dict = util.load_latest_model(args, net, prefix=prefix, return_state_dict=True, nth=nth)
-    for key in weight_dict.keys():
-        net_dict[key[7:]] = weight_dict[key]
-    net.load_state_dict(net_dict)
-    net.eval()
-    detector = model.Detect(num_classes=2, bkg_label=0, top_k=1500,
-                            conf_thresh=0.05, nms_thresh=0.3)
+def test_rotation(opt):
+    # Load
+    assert len(opt.model_prefix_list) <= torch.cuda.device_count(), \
+        "number of models should not exceed the device numbers"
+    nets = []
+    for device_id, prefix in enumerate(opt.model_prefix_list):
+
+        net = model.SSD(cfg, connect_loc_to_conf=True, fix_size=False,
+                        incep_conf=True, incep_loc=True)
+        net = net.to("cuda:%d"%(device_id))
+        net_dict = net.state_dict()
+        weight_dict = util.load_latest_model(args, net, prefix=prefix,
+                                             return_state_dict=True, nth=opt.nth_best_model)
+        loading_fail_signal = False
+        for key in weight_dict.keys():
+            if key[7:] in net_dict:
+                if net_dict[key[7:]].shape == weight_dict[key].shape:
+                    net_dict[key[7:]] = weight_dict[key]
+                else:
+                    print("Key: %s from disk has shape %s copy to the model with shape %s"%
+                          (key[7:], str(weight_dict[key].shape), str(net_dict[key[7:]].shape)))
+                    loading_fail_signal = True
+            else:
+                print("Key: %s does not exist in net_dict"%(key[7:]))
+        if loading_fail_signal:
+            raise RuntimeError('Shape Error happens, remove "%s" from your -mpl settings.'%(prefix))
+
+        net.load_state_dict(net_dict)
+        net.eval()
+        nets.append(net)
+        print("Above model loaded with out a problem")
+    detector = model.Detect(num_classes=2, bkg_label=0,
+                            top_k=opt.detector_top_k,
+                            conf_thresh=opt.detector_conf_threshold,
+                            nms_thresh=opt.detector_nms_threshold)
     
     # Enumerate test folder
-    img_list = glob.glob(os.path.expanduser("~/Pictures/dataset/ocr/SROIE2019_test/*.jpg"))
+    root_path = os.path.expanduser(opt.test_dataset_root)
+    if not os.path.exists(root_path):
+        raise FileNotFoundError("%s does not exists, please check your -tdr/--test_dataset_root settings"%(root_path))
+    img_list = glob.glob(root_path + "/*.jpg")
     for i, img_file in enumerate(sorted(img_list)):
         start = time.time()
         name = img_file[img_file.rfind("/") + 1 : -4]
@@ -131,15 +182,20 @@ def test_rotation(prefix, nth=1):
 
         # Prepare image tensor and test
         image_t = torch.Tensor(util.normalize_image(args, image)).unsqueeze(0)
-        image_t = image_t.permute(0, 3, 1, 2).cuda()
+        image_t = image_t.permute(0, 3, 1, 2)
         #visualize_bbox(args, cfg, image, [torch.Tensor(rot_coord).cuda()], net.prior, height_final/width_final)
-        out = net(image_t, is_train=False)
-        loc_data, conf_data, prior_data = out
-        det_result = detector(loc_data, conf_data, prior_data)
 
-        # Extract the predicted bboxes
-        idx = det_result.data[0, 1, :, 0] >= 0.1
-        text_boxes = det_result.data[0, 1, idx, 1:]
+        text_boxes = []
+        for device_id, net in enumerate(nets):
+            image_t = image_t.to("cuda:%d"%(device_id))
+            out = net(image_t, is_train=False)
+            loc_data, conf_data, prior_data = out
+            prior_data = prior_data.to("cuda:%d"%(device_id))
+            det_result = detector(loc_data, conf_data, prior_data)
+            # Extract the predicted bboxes
+            idx = det_result.data[0, 1, :, 0] >= 0.1
+            text_boxes.append(det_result.data[0, 1, idx, 1:])
+        text_boxes = torch.cat(text_boxes, dim=0)
         text_boxes = combine_boxes(text_boxes, w=w_final, h=h_final)
         pred = [[float(coor) for coor in area] for area in text_boxes]
         BBox = [imgaug.imgaug.BoundingBox(box[0] * w_final, box[1] * h_final, box[2] * w_final, box[3] * h_final)
@@ -158,11 +214,15 @@ def test_rotation(prefix, nth=1):
             # 4-point to 8-point: x1, y1, x2, y1, x2, y2, x1, y2
             f.write("%d,%d,%d,%d,%d,%d,%d,%d\n"%(x1, y1, x2, y1, x2, y2, x1, y2))
             cv2.rectangle(img, (x1, y1), (x2, y2), (255, 105, 65), 2)
-        cv2.imwrite(os.path.join(args.val_log, name + ".jpg"), img)
+        img_save_directory = os.path.join(args.path, args.code_name, "val+" + "-".join(opt.model_prefix_list))
+        if not os.path.exists(img_save_directory):
+            os.mkdir(img_save_directory)
+        cv2.imwrite(os.path.join(img_save_directory, name + ".jpg"), img)
         f.close()
         print("%d th image cost %.2f seconds"%(i, time.time() - start))
 
 
 if __name__ == "__main__":
+    opt = parse_arguments()
     with torch.no_grad():
-        test_rotation()
+        test_rotation(opt)
