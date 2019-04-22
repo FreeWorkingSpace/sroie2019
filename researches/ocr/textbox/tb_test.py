@@ -153,8 +153,6 @@ def test_rotation(opt):
         raise FileNotFoundError("%s does not exists, please check your -tdr/--test_dataset_root settings"%(root_path))
     img_list = glob.glob(root_path + "/*.jpg")
     for i, img_file in enumerate(sorted(img_list)):
-        if i > 3:
-            break
         start = time.time()
         name = img_file[img_file.rfind("/") + 1 : -4]
         img = cv2.imread(img_file)
