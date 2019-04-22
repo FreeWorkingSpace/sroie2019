@@ -153,6 +153,8 @@ def test_rotation(opt):
         raise FileNotFoundError("%s does not exists, please check your -tdr/--test_dataset_root settings"%(root_path))
     img_list = glob.glob(root_path + "/*.jpg")
     for i, img_file in enumerate(sorted(img_list)):
+        if i > 3:
+            break
         start = time.time()
         name = img_file[img_file.rfind("/") + 1 : -4]
         img = cv2.imread(img_file)
@@ -234,8 +236,9 @@ def test_rotation(opt):
         cv2.imwrite(os.path.join(img_save_directory, name + ".jpg"), img)
         f.close()
         print("%d th image cost %.2f seconds"%(i, time.time() - start))
-    os.chdir(os.path.join(args.path, args.code_name, "result"))
-    os.system("zip result_%s.zip ~/Pictures/dataset/ocr/_text_detection/result/*.txt"%("val+" + "-".join(opt.model_prefix_list)))
+    os.chdir(os.path.join(args.path, args.code_name, "result+"+ "-".join(opt.model_prefix_list)))
+    os.system("zip result_%s.zip ~/Pictures/dataset/ocr/_text_detection/result+%s/*.txt"
+              %("val+" + "-".join(opt.model_prefix_list), "-".join(opt.model_prefix_list)))
 
 
 if __name__ == "__main__":
