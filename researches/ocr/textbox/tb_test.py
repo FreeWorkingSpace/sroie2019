@@ -153,6 +153,7 @@ def test_rotation(opt):
 
         # detect rotation for returning the image back
         img, transform_det = estimate_angle(img, args, None, None, None)
+        transform_det["rotation"] = 0
         if transform_det["rotation"] != 0:
             rot_aug = augmenters.Affine(rotate=transform_det["rotation"],
                                          cval=args.aug_bg_color)
@@ -178,7 +179,7 @@ def test_rotation(opt):
         h_re, w_re = image.shape[0], image.shape[1]
         # Pad the image into a square image
         pad_aug = augmenters.Sequential(
-            augmenters.PadToFixedSize(width=square, height=square, pad_cval=0, position="center")
+            augmenters.PadToFixedSize(width=square, height=square, pad_cval=255, position="center")
         )
         pad_aug = pad_aug.to_deterministic()
         image = pad_aug.augment_image(image)
