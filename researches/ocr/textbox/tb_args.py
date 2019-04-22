@@ -94,8 +94,9 @@ def parse_arguments():
     parser.add_argument(
         "-csw",
         "--cfg_super_wide",
-        action="store_true",
-        help="allow match the small boxes inside the large box",
+        type=float,
+        help="probability of using super wide box matching mechanism",
+        default=0.3
     )
     parser.add_argument(
         "-cswc",
@@ -104,6 +105,14 @@ def parse_arguments():
         help="to suppress or increase the matched super wide overlap"
              "<1 means suppress, >1 means increase",
         default=0.5
+    )
+    parser.add_argument(
+        "-jdt",
+        "--jaccard_distance_threshold",
+        type=float,
+        help="The jaccard distance of prior box and target below this value will"
+             "be treated as negative value.",
+        default=0.45
     )
     
     

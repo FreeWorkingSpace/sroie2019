@@ -15,7 +15,7 @@ cfg = {
     # As long as its length does not exceed the length of other value
     # e.g. feature_map_sizes, box_height, box_height_large
     # Then it will be OK
-    'conv_output': ["conv_4", "conv_5", "extra_2", "extra_3", "extra_4"],
+    'conv_output': ["conv_4", "conv_5", "extra_2", "extra_3"],
     'feature_map_sizes': [96, 48, 24, 24, 24],
     # For static input size only, when Dynamic mode is turned out, it will not be used
     # Must be 2d list or tuple
@@ -26,14 +26,14 @@ cfg = {
     # 'box_height': [[16], [26], [36]],
     # 'box_height': [[10, 16], [26], [36]],
     # 'box_height': [[16], [26], []],
-    'box_height': [[18], [30], [46], [68], [98]],
+    'box_height': [[18], [30], [46], [68]],
     'box_ratios': [[2, 4, 7, 11, 15, 20, 26], [0.5, 1, 2, 5, 9, 13, 16, 18, 20],
-                   [1, 2, 5, 8, 10, 12, 15], [1, 2, 3, 5, 8, 11], [1, 2, 3, 4]],
+                   [1, 2, 5, 8, 10, 12, 15], [1, 2, 3, 5, 8], [1, 2, 3, 4]],
     # If big_box is True, then box_height_large and box_ratios_large will be used
     'big_box': True,
-    'box_height_large': [[24], [38], [56], [82], [116]],
+    'box_height_large': [[24], [38], [56], [98]],
     'box_ratios_large': [[1, 2, 4, 7, 11, 15, 20], [0.5, 1, 3, 6, 9, 11, 13, 15, 17],
-                         [1, 2, 4, 7, 9, 11, 14], [1, 2, 3, 5, 7, 9], [1, 2, 3, 4]],
+                         [1, 2, 4, 7, 9, 11, 14], [1, 2, 3, 5, 7], [1, 2, 3, 4]],
     # You can increase the stride when feature_map_size is large
     # especially at swallow conv layers, so as not to create lots of prior boxes
     'stride': [1, 1, 1, 1, 1],
@@ -48,7 +48,7 @@ cfg = {
     'overlap_thresh': 0.45,
     # Whether to constrain the prior boxes inside the image
     'clip': True,
-    'super_wide': True,
+    'super_wide': 0.5,
     'super_wide_coeff': 0.5,
 }
 
@@ -79,7 +79,8 @@ class SSD(nn.Module):
         self.create_backbone_model()
         
         # Location and Confidence Layer
-        for i, in_channel in enumerate(cfg['loc_and_conf']):
+        for i  in range(len(cfg['conv_output'])):
+            in_channel = cfg["loc_and_conf"][i]
             anchor = calculate_anchor_number(cfg, i)
             # Create Location and Confidence Layer
             self.loc_layers.append(self.create_loc_layer(

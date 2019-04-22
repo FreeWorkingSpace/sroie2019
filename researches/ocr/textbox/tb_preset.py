@@ -38,10 +38,11 @@ def Unique_Patterns(args):
 
 
 def Runtime_Patterns(args):
-    args.cfg_super_wide = False,
+    args.cfg_super_wide = 0.5,
     args.cfg_super_wide_coeff = 0.5,
     args.model_prefix_finetune = "768",
     args.model_prefix = "768",
+    args.jaccard_distance_threshold = 0.45,
     return args
 
 

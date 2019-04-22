@@ -25,6 +25,7 @@ args = util.cover_edict_with_argparse(opt, edict)
 cfg = model.cfg
 cfg['super_wide'] = args.cfg_super_wide
 cfg['super_wide_coeff'] = args.cfg_super_wide_coeff
+cfg['overlap_thresh'] = args.jaccard_distance_threshold
 if not torch.cuda.is_available():
     raise RuntimeError("Need cuda devices")
 dt = datetime.datetime.now().strftime("%Y-%m-%d_%H:%M")
@@ -241,7 +242,7 @@ def main():
                 f1_score.append(f1)
                 val_losses = [np.asarray(accuracy), np.asarray(precision),
                               np.asarray(recall), np.asarray(f1_score)]
-            if epoch != 0 and epoch % 20 == 0:
+            if epoch != 0 and epoch % 10 == 0:
                 util.save_model(args, args.curr_epoch, net.state_dict(), prefix=args.model_prefix,
                                 keep_latest=20)
             if epoch > 5:

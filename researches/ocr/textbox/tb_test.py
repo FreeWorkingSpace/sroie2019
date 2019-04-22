@@ -27,6 +27,30 @@ if not os.path.exists(result_dir):
 # Image will be resize to this size
 square = 2048
 
+import argparse
+
+def parse_arguments():
+    parser = argparse.ArgumentParser(description='Textbox Detector Settings')
+    ##############
+    #        TRAINING        #
+    ##############
+    parser.add_argument(
+        "-mpl",
+        "--model_prefix_list",
+        nargs='+',
+        help="a list of model prefix to do the ensemble",
+        default=["768", "tb_0012"]
+    )
+    parser.add_argument(
+        "-nth",
+        "--nth_best_model",
+        type=int,
+        help="1 represent the latest model",
+        default=1
+    )
+    args = parser.parse_args()
+    return args
+
 
 def augment_back(transform_det, height_ori, width_ori, v_crop, h_crop):
     aug_list = []
@@ -50,19 +74,19 @@ def augment_back(transform_det, height_ori, width_ori, v_crop, h_crop):
     return aug
 
 
-def test_rotation(nth):
+def test_rotation(prefix, nth=1):
     # Load Model
     net = model.SSD(cfg, connect_loc_to_conf=True, fix_size=False,
                     incep_conf=True, incep_loc=True, nms_thres=args.nms_threshold)
     net = net.cuda()
     net_dict = net.state_dict()
-    weight_dict = util.load_latest_model(args, net, prefix="768", return_state_dict=True, nth=nth)
+    weight_dict = util.load_latest_model(args, net, prefix=prefix, return_state_dict=True, nth=nth)
     for key in weight_dict.keys():
         net_dict[key[7:]] = weight_dict[key]
     net.load_state_dict(net_dict)
     net.eval()
-    detector = model.Detect(num_classes=2, bkg_label=0, top_k=2000,
-                            conf_thresh=0.02, nms_thresh=0.3)
+    detector = model.Detect(num_classes=2, bkg_label=0, top_k=1500,
+                            conf_thresh=0.05, nms_thresh=0.3)
     
     # Enumerate test folder
     img_list = glob.glob(os.path.expanduser("~/Pictures/dataset/ocr/SROIE2019_test/*.jpg"))

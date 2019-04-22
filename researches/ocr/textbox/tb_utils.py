@@ -2,6 +2,7 @@
 # This file was copied from
 # https://github.com/amdegroot/ssd.pytorch
 #
+import random
 import torch
 import torch.nn.functional as F
 
@@ -155,8 +156,8 @@ def match(cfg, threshold, truths, priors, variances, labels, loc_t, conf_t, idx,
     #overlaps = box_jaccard(center_size(truths, 1), priors)
     prior_ratios = calibrate_prior(priors[:, 2] / priors[:, 3]).unsqueeze(0).repeat(truths.size(0), 1)
     overlaps = overlaps * prior_ratios
-    if cfg["super_wide"]:
-        overlaps += (super_wide_jaccard(truths, priors, img_ratio) / cfg["super_wide_coeff"])
+    if cfg["super_wide"] > random.random():
+        overlaps += (super_wide_jaccard(truths, priors, img_ratio) * cfg["super_wide_coeff"])
 
     # 找到与每个ground truth boxes最接近的prior boxes的IOU和index, length = num_gt
     best_prior_overlap, best_prior_idx = overlaps.max(1, keepdim=True)
