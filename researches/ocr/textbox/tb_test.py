@@ -44,6 +44,13 @@ def parse_arguments():
         default="~/Pictures/dataset/ocr/SROIE2019_test"
     )
     parser.add_argument(
+        "-ext",
+        "--extension",
+        type=str,
+        help="extention of image",
+        default="jpg"
+    )
+    parser.add_argument(
         "-mpl",
         "--model_prefix_list",
         nargs='+',
@@ -151,7 +158,7 @@ def test_rotation(opt):
     root_path = os.path.expanduser(opt.test_dataset_root)
     if not os.path.exists(root_path):
         raise FileNotFoundError("%s does not exists, please check your -tdr/--test_dataset_root settings"%(root_path))
-    img_list = glob.glob(root_path + "/*.jpg")
+    img_list = glob.glob(root_path + "/*.%s"%(opt.extension))
     for i, img_file in enumerate(sorted(img_list)):
         start = time.time()
         name = img_file[img_file.rfind("/") + 1 : -4]
