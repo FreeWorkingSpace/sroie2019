@@ -5,7 +5,6 @@ import cv2, torch, distance
 import torch.nn as nn
 import omni_torch.visualize.basic as vb
 import omni_torch.utils as util
-import researches.ocr.attention_ocr as init
 import researches.ocr.attention_ocr.aocr_data as data
 import researches.ocr.attention_ocr.aocr_presets as preset
 import researches.ocr.attention_ocr.aocr_models as att_model
