@@ -51,11 +51,18 @@ def parse_arguments():
         default="jpg"
     )
     parser.add_argument(
+        "-gt_ext",
+        "--ground_truth_extension",
+        type=str,
+        help="ground truth extention (text file) of image",
+        default="txt"
+    )
+    parser.add_argument(
         "-mpl",
         "--model_prefix_list",
         nargs='+',
         help="a list of model prefix to do the ensemble",
-        default=["ft_003_1"]
+        default=["ft_003_3"]
         # this fit the current tb_model.py code: ["ft_0012_1"]
     )
     parser.add_argument(
@@ -159,6 +166,7 @@ def test_rotation(opt):
     if not os.path.exists(root_path):
         raise FileNotFoundError("%s does not exists, please check your -tdr/--test_dataset_root settings"%(root_path))
     img_list = glob.glob(root_path + "/*.%s"%(opt.extension))
+    precisions, recalls = [], []
     for i, img_file in enumerate(sorted(img_list)):
         start = time.time()
         name = img_file[img_file.rfind("/") + 1 : -4]
@@ -229,22 +237,40 @@ def test_rotation(opt):
                   #save_dir=args.val_log)
         
         f = open(os.path.join(result_dir, name + ".txt"), "w")
+
+        import researches.ocr.textbox.tb_data as tb_data
+        gt_box_file = os.path.join(opt.test_dataset_root, name + "." + opt.ground_truth_extension)
+        coords = tb_data.parse_file(os.path.expanduser(gt_box_file))
+        gt_coords = []
+        for coord in coords:
+            x1, x2 = min(coord[::2]), max(coord[::2])
+            y1, y2 = min(coord[1::2]), max(coord[1::2])
+            gt_coords.append([x1, y1, x2, y2])
+        pred_final = []
         for box in bbox.bounding_boxes:
             x1, y1, x2, y2 = int(round(box.x1)), int(round(box.y1)), int(round(box.x2)), int(round(box.y2))
+            pred_final.append([x1, y1, x2, y2])
             #box_tensors.append(torch.tensor([x1, y1, x2, y2]))
             # 4-point to 8-point: x1, y1, x2, y1, x2, y2, x1, y2
             f.write("%d,%d,%d,%d,%d,%d,%d,%d\n"%(x1, y1, x2, y1, x2, y2, x1, y2))
             cv2.rectangle(img, (x1, y1), (x2, y2), (255, 105, 65), 2)
+        accu, precision, recall = measure(torch.Tensor(pred_final).cuda(), torch.Tensor(gt_coords).cuda(),
+                                          width=img.shape[1], height=img.shape[0])
+        precisions.append(precision)
+        recalls.append(recall)
         img_save_directory = os.path.join(args.path, args.code_name, "val+" + "-".join(opt.model_prefix_list))
         if not os.path.exists(img_save_directory):
             os.mkdir(img_save_directory)
         cv2.imwrite(os.path.join(img_save_directory, name + ".jpg"), img)
         f.close()
         print("%d th image cost %.2f seconds"%(i, time.time() - start))
+    print("Precision: %.2f, Recall: %.2f"%(avg(precisions), avg(recalls)))
     os.chdir(os.path.join(args.path, args.code_name, "result+"+ "-".join(opt.model_prefix_list)))
     os.system("zip result_%s.zip ~/Pictures/dataset/ocr/_text_detection/result+%s/*.txt"
               %("val+" + "-".join(opt.model_prefix_list), "-".join(opt.model_prefix_list)))
 
+def avg(list):
+    return sum(list) / len(list)
 
 if __name__ == "__main__":
     opt = parse_arguments()
