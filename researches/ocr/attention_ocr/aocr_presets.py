@@ -6,10 +6,10 @@ def GeneralPattern(args):
     args.batch_size_per_gpu = 32
     args.batch_size_per_gpu_val = 32
     args.random_order_load = False
-    args.loading_threads = 2
+    args.loading_threads = 3
     args.cover_exist = True
     args.epoch_num = 100
-    args.finetune = False
+    args.finetune = True
 
     args.img_channel = 3
     args.normalize_img = True
@@ -26,15 +26,15 @@ def Unique_Patterns(args):
     args.text_seperator = ":"
     args.epoches_per_phase = 1
 
-    args.decoder_rnn_layers = 1
+    args.decoder_rnn_layers = 2
     args.encoder_out_channel = 128
     args.decoder_bottleneck = 3840
     
     args.resize_height = 48
-    args.max_img_size = 720
-    args.max_str_size = 45
-    args.attn_length = 45
-    args.hidden_size = 128
+    args.max_img_size = 960
+    args.max_str_size = 30
+    args.attn_length = 60
+    args.hidden_size = 256
     args.teacher_forcing_ratio = 0.8
     args.teacher_forcing_ratio_decay = 0.95
     args.label_dict = {'SOS': 0, ' ': 1, '!': 2, '"': 3, '#': 4, '$': 5, '%': 6, '&': 7,

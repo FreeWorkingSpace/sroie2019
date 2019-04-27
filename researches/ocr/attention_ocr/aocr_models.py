@@ -3,12 +3,11 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torchvision.models import *
-import researches.ocr.attention_ocr as init
 import omni_torch.networks.blocks as omth_blocks
 
 
 class Attn_CNN(nn.Module):
-    def __init__(self, lstm_hidden, backbone_require_grad=False):
+    def __init__(self, backbone_require_grad=False):
         super().__init__()
         # Use pre-trained model as backbone
         backbone = resnet18(pretrained=True)
@@ -25,24 +24,17 @@ class Attn_CNN(nn.Module):
         self.final_conv = omth_blocks.InceptionBlock(256, filters=[[256, 256], [256, 256]],
                                                      kernel_sizes=[[[3, 1], 1], [3, 1]], stride=[[1, 1], [1, 1]],
                                                      padding=[[[0, 0], 0], [[0, 1], 0]])
-        self.rnn = nn.Sequential(
-            BidirectionalLSTM(512, lstm_hidden, lstm_hidden),
-            BidirectionalLSTM(lstm_hidden, lstm_hidden, lstm_hidden))
-        self.rnn.apply(init.init_rnn)
 
     def forward(self, x):
         x = self.cnn(x)
         x = self.final_conv(x)
-        x = x.squeeze(2)
-        x = x.permute(2, 0, 1)  # [w, b, c]
-        x = self.rnn(x)  # seq * batch * n_classes// 25 × batchsize × 256（隐藏节点个数）
         return x
 
 
 class BidirectionalLSTM(nn.Module):
     def __init__(self, nIn, nHidden, nOut):
         super().__init__()
-        self.rnn = nn.LSTM(nIn, nHidden, bidirectional=True)
+        self.rnn = nn.LSTM(nIn, nHidden, bidirectional=True, batch_first=False)
         self.embedding = nn.Linear(nHidden * 2, nOut)
 
     def forward(self, input):
@@ -55,36 +47,22 @@ class BidirectionalLSTM(nn.Module):
         return output
 
 
-class Attentiondecoder(nn.Module):
-    """
-        采用attention注意力机制，进行解码
-    """
-
-    def __init__(self, hidden_size, output_size, dropout_p=0.1, max_length=71):
-        super(Attentiondecoder, self).__init__()
-        self.hidden_size = hidden_size
-        self.output_size = output_size
-        self.dropout_p = dropout_p
-        self.max_length = max_length
-
-        self.embedding = nn.Embedding(self.output_size, self.hidden_size)
-        self.attn = nn.Linear(self.hidden_size * 2, self.max_length)
-        self.attn_combine = nn.Linear(self.hidden_size * 2, self.hidden_size)
-        self.dropout = nn.Dropout(self.dropout_p)
-        self.gru = nn.GRU(self.hidden_size, self.hidden_size)
-        self.out = nn.Linear(self.hidden_size, self.output_size)
-
-
 class AttnDecoder(nn.Module):
-    def __init__(self, args, dropout_p=0.1, hidden_init="zero"):
+    def __init__(self, args, encoder_hidden=256, dropout_p=0.1,
+                 hidden_from_input="zero"):
         super().__init__()
         self.hidden_size = args.hidden_size
         self.output_size = args.output_size
         self.attn_length = args.attn_length
         self.rnn_layers = args.decoder_rnn_layers
         self.dropout_p = dropout_p
+        self.sos_token = args.label_dict["SOS"]
         self.teacher_forcing_ratio = args.teacher_forcing_ratio
+        self.hidden_from_x = hidden_from_input
 
+        self.encoder_rnn = nn.Sequential(
+            BidirectionalLSTM(512, encoder_hidden, encoder_hidden),
+            BidirectionalLSTM(encoder_hidden, encoder_hidden, encoder_hidden))
         self.embedding = nn.Embedding(self.output_size, self.hidden_size)
         self.attn = nn.Linear(self.hidden_size * 2, self.attn_length)
         self.dropout = nn.Dropout(self.dropout_p)
@@ -92,29 +70,49 @@ class AttnDecoder(nn.Module):
         self.gru = nn.GRU(self.hidden_size, self.hidden_size, num_layers=self.rnn_layers)
         self.out = nn.Linear(self.hidden_size, self.output_size)
         # self.
+        
+    def _forward(self, input, hidden, x):
+        """
+        Unable to parallelize,
+        """
+        embedded = self.dropout(self.embedding(input))
+        attn_weights = self.attn(torch.cat((embedded.permute(1, 0, 2).squeeze(0), hidden[0]), 1))
+        attn_weights = F.softmax(attn_weights, dim=1).unsqueeze(1)
+        attn_applied = torch.matmul(attn_weights, x.permute(1, 0, 2))
+        output = self.attn_combine(torch.cat((attn_applied, embedded), dim=2).squeeze(1))
+        output = F.relu(output)
+        output, hidden = self.gru(output.unsqueeze(0), hidden)
+        output = F.log_softmax(self.out(output[0]), dim=1)
+        return output
 
-    def forward(self, input, encoder_outputs, label_batch, is_train=True, verbose=False):
+    def forward(self, x, y, is_train=True, verbose=False):
         # Init
         decoder_outputs, decoder_attns = [], []
         if is_train:
             use_teacher_forcing = True if random.random() < self.teacher_forcing_ratio else False
         else:
             use_teacher_forcing = False
-        hidden = self.initHidden(input.size(0)).cuda()
+        input = torch.zeros([x.size(0), 1]).long().cuda() + self.sos_token
+        hidden = self.initHidden(input.size(0), x).cuda()
+        #cell_state = torch.zeros(hidden.shape).cuda()
         if verbose:
             print("Create decoder input with shape: %s." % str(input.shape))
             print("Create decoder hidden with shape: %s." % str(hidden.shape))
 
         # Forward
+        assert x.size(2) == 1
         self.gru.flatten_parameters()
-        for di in range(label_batch.size(1)):
-            embedded = self.dropout(self.embedding(input)).permute(1, 0, 2)
-            attn_weights = F.softmax(self.attn(torch.cat((embedded.squeeze(0), hidden.squeeze(0)), 1)), dim=1)
-            attn_applied = torch.mul(encoder_outputs,
-                                     attn_weights.unsqueeze(1).unsqueeze(1).repeat(1, encoder_outputs.size(1),
-                                                                                   encoder_outputs.size(2), 1))
-            output = self.attn_combine(attn_applied, embedded.squeeze(0))
-            output, hidden = self.gru(output, hidden)
+        x = x.squeeze(2)
+        x = x.permute(2, 0, 1)
+        x = self.encoder_rnn(x)
+        for di in range(y.size(1)):
+            embedded = self.dropout(self.embedding(input))
+            attn_weights = self.attn(torch.cat((embedded.permute(1, 0, 2).squeeze(0), hidden[0]), 1))
+            attn_weights = F.softmax(attn_weights, dim=1).unsqueeze(1)
+            attn_applied = torch.matmul(attn_weights, x.permute(1, 0, 2))
+            output = self.attn_combine(torch.cat((attn_applied, embedded), dim=2).squeeze(1))
+            output = F.relu(output)
+            output, hidden = self.gru(output.unsqueeze(0), hidden)
             output = F.log_softmax(self.out(output[0]), dim=1)
             if verbose:
                 print("Step: %d, output=>%s, attn=>%s" %
@@ -122,16 +120,25 @@ class AttnDecoder(nn.Module):
             decoder_outputs.append(output)
             decoder_attns.append(attn_weights)
             if use_teacher_forcing:
-                input = label_batch[:, di].unsqueeze(-1)  # Teacher forcing
+                input = y[:, di].unsqueeze(-1)  # Teacher forcing
             else:
                 topv, topi = output.topk(1)
                 input = topi.detach()  # detach from history as input
         decoder_outputs = torch.stack(decoder_outputs, -1)
-        decoder_attns = torch.stack(decoder_attns, -1)
+        decoder_attns = torch.cat(decoder_attns, dim=1)
         return decoder_outputs, decoder_attns
 
-    def initHidden(self, batch_size):
-        return torch.zeros(self.rnn_layers, batch_size, self.hidden_size)
+    def initHidden(self, batch_size, x):
+        if self.hidden_from_x == "sum":
+            pass
+        elif self.hidden_from_x == "weight_sum":
+            pass
+        elif self.hidden_from_x == "linear":
+            pass
+        elif self.hidden_from_x == "zero":
+            return torch.zeros(self.rnn_layers, batch_size, self.hidden_size)
+        else:
+            raise NotImplementedError
 
 
 if __name__ == "__main__":
@@ -151,7 +158,7 @@ if __name__ == "__main__":
     print("Output: %s"%str(pred))
     """
 
-    encoder = Attn_CNN(256)
+    encoder = Attn_CNN()
     decoder = AttnDecoder(args)
     encoder = torch.nn.DataParallel(encoder).cuda()
     decoder = torch.nn.DataParallel(decoder).cuda()
@@ -164,13 +171,13 @@ if __name__ == "__main__":
     print("Image was encoded as shape: %s" % (str(encoder_outputs.shape)))
 
     # Decoder input is default the index of SOS token
-    input = torch.zeros([encoder_outputs.size(0), 1]).long().cuda() + args.label_dict["SOS"]
-    hidden = decoder.module.initHidden(encoder_outputs.size(0))
-    print("Create decoder input with shape: %s." % str(input.shape))
-    print("Create decoder hidden with shape: %s." % str(hidden.shape))
+    #input = torch.zeros([encoder_outputs.size(0), 1]).long().cuda() + args.label_dict["SOS"]
+    #hidden = decoder.module.initHidden(encoder_outputs.size(0))
+    #print("Create decoder input with shape: %s." % str(input.shape))
+    #print("Create decoder hidden with shape: %s." % str(hidden.shape))
 
     start = time.time()
-    out, decoder_attention = decoder(input, encoder_outputs, label_batch)
+    out, decoder_attention = decoder(encoder_outputs, label_batch)
     # for i in range(label_batch.size(1)):
     #  out, decoder_attention = decoder(input, encoder_outputs)
     print("Decoder output shape: %s" % str(out.shape))

@@ -12,6 +12,7 @@ from omni_torch.networks.optimizer.adabound import AdaBound
 from researches.ocr.attention_ocr.aocr_augment import *
 from researches.ocr.attention_ocr.aocr_util import *
 from researches.ocr.attention_ocr.aocr_args import *
+import researches.ocr.attention_ocr as init
 
 opt = parse_arguments()
 edict = util.get_args(preset.PRESET)
@@ -48,8 +49,8 @@ def fit(args, encoder, decoder, dataset, encode_optimizer, decode_optimizer, cri
             img_batch, label_batch = data[0][0].cuda(), data[0][1].cuda()
             encoder_outputs = encoder(img_batch)
             # Decoder input is default the index of SOS token
-            input = torch.zeros([encoder_outputs.size(0), 1]).long().cuda() + args.label_dict["SOS"]
-            outputs, attentions = decoder(input, encoder_outputs, label_batch, is_train)
+            #input = torch.zeros([encoder_outputs.size(0), 1]).long().cuda() + args.label_dict["SOS"]
+            outputs, attentions = decoder(x=encoder_outputs, y=label_batch, is_train=is_train)
             loss = [criterion(outputs[:, :, i], label_batch[:, i]) for i in range(outputs.size(2))]
             loss = sum(loss) / len(loss)
             Loss.append(float(loss))
@@ -75,6 +76,7 @@ def fit(args, encoder, decoder, dataset, encode_optimizer, decode_optimizer, cri
                 # Calculate String Level Accuracy
                 correct = [100 if label == pred_str[i] else 0 for i, label in enumerate(label_str)]
                 Str_Accu.append(avg(correct))
+                print_pred_and_label(pred_str, label_str, print_correct=True)
         if is_train:
             args.curr_epoch += 1
             print(" --- Pred loss: %.4f, at epoch %04d, cost %.2f seconds ---" %
@@ -111,23 +113,21 @@ def main():
         print("\n =============== Cross Validation: %s/%s ================ " %
                   (idx + 1, len(datasets)))
         # Prepare Network
-        encoder = att_model.Attn_CNN(args.img_channel, args.encoder_out_channel)
+        encoder = att_model.Attn_CNN(backbone_require_grad=True)
         decoder = att_model.AttnDecoder(args)
         criterion = nn.NLLLoss()
         if args.finetune:
             encoder, decoder = util.load_latest_model(args, [encoder, decoder],
-                                                      prefix=["encoder", "decoder"])
+                                                      prefix=["ori_encoder", "ori_decoder"])
         else:
             # Missing Initialization functions for RNN in CUDA
             # splitting initialization on CPU and GPU respectively
-            encoder.apply(init.init_rnn).to(args.device).apply(init.init_others)
             decoder.apply(init.init_rnn).to(args.device).apply(init.init_others)
         encoder = torch.nn.DataParallel(encoder).cuda()
         decoder = torch.nn.DataParallel(decoder).cuda()
         torch.backends.cudnn.benchmark = True
         
         # Prepare loss function and optimizer
-        
         encoder_optimizer = AdaBound(encoder.parameters(),
                                      lr=args.learning_rate, weight_decay=args.weight_decay)
         decoder_optimizer = AdaBound(decoder.parameters(),

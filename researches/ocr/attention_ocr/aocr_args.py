@@ -48,14 +48,14 @@ def parse_arguments():
         "--max_img_size",
         type=int,
         help="Image will be pad/crop if their lenght is shorter/longer than this value",
-        default=720
+        default=960
     )
     parser.add_argument(
         "-mss",
         "--max_str_size",
         type=int,
         help="label string will be pad/crop with EOS if its length is shorter/longer than this value",
-        default=50
+        default=30
     )
     
     ##############
@@ -77,14 +77,14 @@ def parse_arguments():
              "If the attn_length is L, then during each step, the model will implicitly divide"
              "the model into L pieces of [b, c, h, w/L] tensor, and assign different weight"
              "to them at each time step",
-        default=90
+        default=60
     )
     parser.add_argument(
         "-hs",
         "--hidden_size",
         type=int,
         help="the hidden state size inside an RNN",
-        default=128
+        default=256
     )
     parser.add_argument(
         "-drl",

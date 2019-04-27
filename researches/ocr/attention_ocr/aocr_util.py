@@ -1,3 +1,5 @@
+import torch
+
 
 def avg(list):
     return sum(list) / len(list)
@@ -12,3 +14,11 @@ def invert_dict(dict):
         else:
             new_dict.update({dict[key]: key})
     return new_dict
+
+def print_pred_and_label(pred, label, print_correct=False):
+    for i, p in enumerate(pred):
+        if p == label[i] and p is not '':
+            print("Correct: %s => %s" % (p, label[i]))
+        else:
+            if not print_correct:
+                print("%s => %s" % (p, label[i]))
