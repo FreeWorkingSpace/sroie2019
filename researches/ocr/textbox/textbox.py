@@ -210,7 +210,7 @@ def main():
                 vb.plot_loss_distribution(train_losses, ["location", "confidence"], args.loss_log, dt + "_loss", window=5)
                 # Val metrics
                 vb.plot_loss_distribution(val_losses, ["Accuracy", "Precision", "Recall", "F1-Score"], args.loss_log,
-                                          dt + "_val", window=5, bound=[0.0, 1.0])
+                                          dt + "_val", window=5, bound={"low": 0.0, "high": 1.0})
         # Clean the data for next cross validation
         del net, optimizer
         args.curr_epoch = 0

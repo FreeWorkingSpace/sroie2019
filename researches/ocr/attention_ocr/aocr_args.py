@@ -11,14 +11,14 @@ def parse_arguments():
         "--batch_size_per_gpu",
         type=int,
         help="batch size inside each GPU during training",
-        default=32
+        default=64
     )
     parser.add_argument(
         "-bpgv",
         "--batch_size_per_gpu_val",
         type=int,
         help="batch size inside each GPU during validation",
-        default=32
+        default=64
     )
     parser.add_argument(
         "-lt",
@@ -26,7 +26,7 @@ def parse_arguments():
         type=int,
         help="loading_threads correspond to each GPU during both training and validation, "
              "e.g. You have 4 GPU and set -lt 2, so 8 threads will be used to load data",
-        default=2
+        default=3
     )
     
     parser.add_argument(
@@ -123,7 +123,7 @@ def parse_arguments():
         "--teacher_forcing_ratio",
         type=float,
         help="Initial value of teacher forcing rate (from 0.0 ~ 1.0)",
-        default=0.8
+        default=0.6
     )
     parser.add_argument(
         "-tfrd",

@@ -38,12 +38,9 @@ def fit(args, encoder, decoder, dataset, encode_optimizer, decode_optimizer, cri
         decoder.eval()
     Loss = []
     Lev_Dis, Str_Accu = [], []
-    decoder.module.teacher_forcing_ratio *= args.teacher_forcing_ratio_decay
+    #decoder.module.teacher_forcing_ratio *= args.teacher_forcing_ratio_decay
     for epoch in range(args.epoches_per_phase):
         visualize = False
-        if args.curr_epoch % 5 == 0 and epoch == 0:
-            print("Visualizing prediction result at %d th epoch %d th iteration" % (args.curr_epoch, epoch))
-            visualize = True
         start_time = time.time()
         for batch_idx, data in enumerate(dataset):
             img_batch, label_batch = data[0][0].cuda(), data[0][1].cuda()
@@ -54,6 +51,7 @@ def fit(args, encoder, decoder, dataset, encode_optimizer, decode_optimizer, cri
             loss = [criterion(outputs[:, :, i], label_batch[:, i]) for i in range(outputs.size(2))]
             loss = sum(loss) / len(loss)
             Loss.append(float(loss))
+            pred_str, label_str = extract_string()
             if is_train:
                 encode_optimizer.zero_grad()
                 decode_optimizer.zero_grad()
@@ -61,22 +59,13 @@ def fit(args, encoder, decoder, dataset, encode_optimizer, decode_optimizer, cri
                 encode_optimizer.step()
                 decode_optimizer.step()
             else:
-                # Measure the string level accuracy
-                index = [outputs[:, :, i].topk(1)[1] for i in range(outputs.size(2))]
-                index = torch.cat(index, dim=1)
-                pred_str = []
-                for idx in index:
-                    pred_str.append("".join([invert_dict[int(i)] for i in idx]))
-                label_str = []
-                for idx in label_batch:
-                    label_str.append("".join([invert_dict[int(i)] for i in idx]))
                 # Calculate Levelstein
                 lev_dist = [distance.levenshtein(pred_str[i], label_str[i]) for i in range(len(label_str))]
                 Lev_Dis.append(avg(lev_dist))
                 # Calculate String Level Accuracy
                 correct = [100 if label == pred_str[i] else 0 for i, label in enumerate(label_str)]
                 Str_Accu.append(avg(correct))
-                print_pred_and_label(pred_str, label_str, print_correct=True)
+                #print_pred_and_label(pred_str, label_str, print_correct=True)
         if is_train:
             args.curr_epoch += 1
             print(" --- Pred loss: %.4f, at epoch %04d, cost %.2f seconds ---" %
@@ -90,15 +79,16 @@ def fit(args, encoder, decoder, dataset, encode_optimizer, decode_optimizer, cri
         return avg(Lev_Dis), avg(Str_Accu)
         
 
-def visualize_attention(img_batch, label_batch, attention):
+def visualize_attention(img_batch, label_batch, attentions, pred_str):
     output_images = []
     # Iterate all batches
     for i in range(label_batch.size(0)):
-        char_len = 0
-        for j in range(label_batch.size(1)):
-            if int(label_batch[i, j]) == 20:
-                break
-            char_len += 1
+        attention = attentions[i, :len(pred_str), :]
+        expand_length = int(img_batch.size(3) / attention.size(1))
+        expand_idx = [[j] * expand_length for j in range(attention.size(0))]
+        expand_idx = torch.cat(torch.tensor(expand_idx), 0).long()
+        
+        pass
 
 
 def main():
@@ -116,6 +106,9 @@ def main():
         encoder = att_model.Attn_CNN(backbone_require_grad=True)
         decoder = att_model.AttnDecoder(args)
         criterion = nn.NLLLoss()
+        encoder = torch.nn.DataParallel(encoder).cuda()
+        decoder = torch.nn.DataParallel(decoder).cuda()
+        torch.backends.cudnn.benchmark = True
         if args.finetune:
             encoder, decoder = util.load_latest_model(args, [encoder, decoder],
                                                       prefix=["ori_encoder", "ori_decoder"])
@@ -123,9 +116,6 @@ def main():
             # Missing Initialization functions for RNN in CUDA
             # splitting initialization on CPU and GPU respectively
             decoder.apply(init.init_rnn).to(args.device).apply(init.init_others)
-        encoder = torch.nn.DataParallel(encoder).cuda()
-        decoder = torch.nn.DataParallel(decoder).cuda()
-        torch.backends.cudnn.benchmark = True
         
         # Prepare loss function and optimizer
         encoder_optimizer = AdaBound(encoder.parameters(),
@@ -151,7 +141,13 @@ def main():
                                 keep_latest=20)
             if epoch > 4:
                 # Train losses
-                vb.plot_loss_distribution(train_losses, ["NLL Loss"], args.loss_log, dt + "_loss", window=5)
+                vb.plot_multi_loss_distribution(
+                    multi_losses = [train_losses, val_losses],
+                    multi_keynames = [["NLL Loss"], ["Levenstein", "String-Level"]],
+                    save_path = args.loss_log,
+                    name = dt + "_loss",
+                    bound=[None, {"low": 0.0, "high": 100.0}],
+                    window=5)
                 # Val metrics
                 if val_set is not None:
                     vb.plot_loss_distribution(val_losses, ["Levenstein", "String-Level"], args.loss_log,

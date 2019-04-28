@@ -21,7 +21,7 @@ class Attn_CNN(nn.Module):
             param.requires_grad = backbone_require_grad
             """
         self.cnn = nn.Sequential(*net)
-        self.final_conv = omth_blocks.InceptionBlock(256, filters=[[256, 256], [256, 256]],
+        self.final_conv = omth_blocks.InceptionBlock(256, filters=[[256, 128], [256, 128]],
                                                      kernel_sizes=[[[3, 1], 1], [3, 1]], stride=[[1, 1], [1, 1]],
                                                      padding=[[[0, 0], 0], [[0, 1], 0]])
 
@@ -32,6 +32,9 @@ class Attn_CNN(nn.Module):
 
 
 class BidirectionalLSTM(nn.Module):
+    """
+    Result will be BAD after BLSTM was added after CNN output
+    """
     def __init__(self, nIn, nHidden, nOut):
         super().__init__()
         self.rnn = nn.LSTM(nIn, nHidden, bidirectional=True, batch_first=False)
@@ -60,16 +63,12 @@ class AttnDecoder(nn.Module):
         self.teacher_forcing_ratio = args.teacher_forcing_ratio
         self.hidden_from_x = hidden_from_input
 
-        self.encoder_rnn = nn.Sequential(
-            BidirectionalLSTM(512, encoder_hidden, encoder_hidden),
-            BidirectionalLSTM(encoder_hidden, encoder_hidden, encoder_hidden))
         self.embedding = nn.Embedding(self.output_size, self.hidden_size)
         self.attn = nn.Linear(self.hidden_size * 2, self.attn_length)
         self.dropout = nn.Dropout(self.dropout_p)
         self.attn_combine = nn.Linear(self.hidden_size * 2, self.hidden_size)
         self.gru = nn.GRU(self.hidden_size, self.hidden_size, num_layers=self.rnn_layers)
         self.out = nn.Linear(self.hidden_size, self.output_size)
-        # self.
         
     def _forward(self, input, hidden, x):
         """
@@ -104,7 +103,6 @@ class AttnDecoder(nn.Module):
         self.gru.flatten_parameters()
         x = x.squeeze(2)
         x = x.permute(2, 0, 1)
-        x = self.encoder_rnn(x)
         for di in range(y.size(1)):
             embedded = self.dropout(self.embedding(input))
             attn_weights = self.attn(torch.cat((embedded.permute(1, 0, 2).squeeze(0), hidden[0]), 1))
