@@ -110,6 +110,8 @@ def main():
         # Prepare Network
         encoder = att_model.Attn_CNN(backbone_require_grad=True)
         decoder = att_model.AttnDecoder(args)
+        encoder.apply(init.init_rnn).apply(init.init_others)
+        decoder.apply(init.init_rnn).apply(init.init_others)
         criterion = nn.NLLLoss()
         encoder = torch.nn.DataParallel(encoder).cuda()
         decoder = torch.nn.DataParallel(decoder).cuda()
@@ -117,10 +119,6 @@ def main():
         if args.finetune:
             encoder, decoder = util.load_latest_model(args, [encoder, decoder],
                                                       prefix=["encoder", "decoder"], strict=False)
-        else:
-            # Missing Initialization functions for RNN in CUDA
-            # splitting initialization on CPU and GPU respectively
-            decoder.apply(init.init_rnn).to(args.device).apply(init.init_others)
         
         # Prepare loss function and optimizer
         encoder_optimizer = AdaBound(encoder.parameters(),

@@ -4,34 +4,30 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torchvision.models import *
 import omni_torch.networks.blocks as omth_blocks
+import researches.ocr.attention_ocr as init
 
 
 class Attn_CNN(nn.Module):
     def __init__(self, backbone_require_grad=False):
         super().__init__()
         # Use pre-trained model as backbone
+        """
         backbone = vgg16_bn(pretrained=True)
         for param in backbone.parameters():
             param.requires_grad = backbone_require_grad
         net = list(backbone.children())[0][:24]
         maxout = nn.MaxPool2d(kernel_size=2, stride=2, padding=0, dilation=1)
+        """
         #net = [ceil_maxout if type(n) is nn.MaxPool2d else n for n in net]
         # 3 x 48 x 960
-        self.cnn1 = nn.Sequential(
+        self.cnn = nn.Sequential(
             nn.Conv2d(3, 64, 3, 1, 1), nn.ReLU(True), nn.MaxPool2d(2, 2),
             nn.Conv2d(64, 128, 3, 1, 1), nn.ReLU(True), nn.MaxPool2d(2, 2),
-            nn.Conv2d(128, 256, 3, (2, 1), 1), nn.BatchNorm2d(256), nn.ReLU(True))
-        # 256 x 6 x 240
-        self.cnn2 = nn.Sequential(
-            nn.Conv2d(256, 256, 1, 1, 0), nn.BatchNorm2d(256), nn.ReLU(True))
-        # 256 x 6 x 240
-        self.cnn3 = nn.Sequential(
+            nn.Conv2d(128, 256, 3, (2, 1), 1), nn.BatchNorm2d(256), nn.ReLU(True),
+            nn.Conv2d(256, 256, 1, 1, 0), nn.BatchNorm2d(256), nn.ReLU(True),
             nn.Conv2d(256, 512, 3, 1, 1), nn.BatchNorm2d(512), nn.ReLU(True),
-            nn.Conv2d(512, 512, 1, 1, 0), nn.BatchNorm2d(512), nn.ReLU(True))
-        # 256 x 3 x 240
-        self.cnn4 = nn.Sequential(
+            nn.Conv2d(512, 512, 1, 1, 0), nn.BatchNorm2d(512), nn.ReLU(True),
             nn.Conv2d(512, 256, 3, 1, 1), nn.BatchNorm2d(256), nn.ReLU(True), nn.MaxPool2d(2, 2))  # 512x1x25
-            #nn.MaxPool2d((2, 2), (2, 1), (0, 1)))
         """
         backbone = vgg11_bn(pretrained=True)
         net = list(backbone.children())[0][:21]
@@ -44,10 +40,7 @@ class Attn_CNN(nn.Module):
                                                      padding=[[[0, 0], 0], [[0, 1], 0]])
 
     def forward(self, x):
-        x = self.cnn1(x)
-        x = self.cnn2(x)
-        x = self.cnn3(x)
-        x = self.cnn4(x)
+        x = self.cnn(x)
         x = self.final_conv(x)
         return x
 
