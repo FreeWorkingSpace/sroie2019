@@ -77,7 +77,7 @@ def parse_arguments():
              "If the attn_length is L, then during each step, the model will implicitly divide"
              "the model into L pieces of [b, c, h, w/L] tensor, and assign different weight"
              "to them at each time step",
-        default=60
+        default=120
     )
     parser.add_argument(
         "-hs",
@@ -123,7 +123,7 @@ def parse_arguments():
         "--teacher_forcing_ratio",
         type=float,
         help="Initial value of teacher forcing rate (from 0.0 ~ 1.0)",
-        default=0.6
+        default=0.7
     )
     parser.add_argument(
         "-tfrd",

@@ -9,7 +9,7 @@ def GeneralPattern(args):
     args.loading_threads = 3
     args.cover_exist = True
     args.epoch_num = 100
-    args.finetune = True
+    args.finetune = False
 
     args.img_channel = 3
     args.normalize_img = True
@@ -33,7 +33,7 @@ def Unique_Patterns(args):
     args.resize_height = 48
     args.max_img_size = 960
     args.max_str_size = 30
-    args.attn_length = 60
+    args.attn_length = 120
     args.hidden_size = 256
     args.teacher_forcing_ratio = 0.8
     args.teacher_forcing_ratio_decay = 0.95
