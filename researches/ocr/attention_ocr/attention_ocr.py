@@ -40,7 +40,6 @@ def fit(args, encoder, decoder, dataset, encode_optimizer, decode_optimizer, cri
     Lev_Dis, Str_Accu = [], []
     #decoder.module.teacher_forcing_ratio *= args.teacher_forcing_ratio_decay
     for epoch in range(args.epoches_per_phase):
-        visualize = False
         start_time = time.time()
         for batch_idx, data in enumerate(dataset):
             img_batch, label_batch = data[0][0].cuda(), data[0][1].cuda()
@@ -51,7 +50,9 @@ def fit(args, encoder, decoder, dataset, encode_optimizer, decode_optimizer, cri
             loss = [criterion(outputs[:, :, i], label_batch[:, i]) for i in range(outputs.size(2))]
             loss = sum(loss) / len(loss)
             Loss.append(float(loss))
-            pred_str, label_str = extract_string()
+            pred_str, label_str = extract_string(invert_dict, outputs, label_batch)
+            if args.curr_epoch != 0 and args.curr_epoch % 10 == 0 and batch_idx == 0:
+                visualize_attention(args.curr_epoch, img_batch, label_batch, attentions, pred_str, label_str)
             if is_train:
                 encode_optimizer.zero_grad()
                 decode_optimizer.zero_grad()
@@ -79,16 +80,20 @@ def fit(args, encoder, decoder, dataset, encode_optimizer, decode_optimizer, cri
         return avg(Lev_Dis), avg(Str_Accu)
         
 
-def visualize_attention(img_batch, label_batch, attentions, pred_str):
-    output_images = []
-    # Iterate all batches
+def visualize_attention(epoch, img_batch, label_batch, attentions, pred_str, label_str):
+    expand_length = int(img_batch.size(3) / attentions.size(2))
+    expand_idx = [torch.Tensor([j] * expand_length) for j in range(attentions.size(2))]
+    expand_idx = torch.cat(expand_idx, 0).long()
+    # Iterate samples from batch
     for i in range(label_batch.size(0)):
-        attention = attentions[i, :len(pred_str), :]
-        expand_length = int(img_batch.size(3) / attention.size(1))
-        expand_idx = [[j] * expand_length for j in range(attention.size(0))]
-        expand_idx = torch.cat(torch.tensor(expand_idx), 0).long()
-        
-        pass
+        img = img_batch[i].unsqueeze(0).repeat(attentions.size(1), 1, 1, 1)
+        attention = attentions[i, :, expand_idx]
+        attention = attention.unsqueeze(1).unsqueeze(1).repeat(1, img.size(1), img.size(2), 1)
+        comb = img * 0.5 + attention * 0.5
+        save_path = os.path.join(args.val_log, "%d_%d.jpg"%(epoch, i))
+        prefix = "Correct: " if pred_str[i] == label_str[i] else ""
+        title = "%s %s => %s"%(prefix, pred_str[i], label_str[i])
+        vb.plot_tensor(args, comb, path=save_path, ratio=1 / attentions.size(1), title=title)
 
 
 def main():
@@ -111,7 +116,7 @@ def main():
         torch.backends.cudnn.benchmark = True
         if args.finetune:
             encoder, decoder = util.load_latest_model(args, [encoder, decoder],
-                                                      prefix=["ori_encoder", "ori_decoder"])
+                                                      prefix=["encoder", "decoder"], strict=False)
         else:
             # Missing Initialization functions for RNN in CUDA
             # splitting initialization on CPU and GPU respectively
@@ -133,25 +138,20 @@ def main():
                                         decoder_optimizer, criterion, is_train=False)
                 lev_dises.append(lev_dis)
                 str_accus.append(str_accu)
-                val_losses = [np.asarray(lev_dises), np.asarray(str_accus)]
+                val_scores = [np.asarray(lev_dises), np.asarray(str_accus)]
             if epoch % 10 == 0:
                 util.save_model(args, args.curr_epoch, encoder.state_dict(), prefix="encoder",
                                 keep_latest=20)
                 util.save_model(args, args.curr_epoch, decoder.state_dict(), prefix="decoder",
                                 keep_latest=20)
             if epoch > 4:
-                # Train losses
                 vb.plot_multi_loss_distribution(
-                    multi_losses = [train_losses, val_losses],
-                    multi_keynames = [["NLL Loss"], ["Levenstein", "String-Level"]],
-                    save_path = args.loss_log,
-                    name = dt + "_loss",
+                    multi_line_data= [train_losses, val_scores],
+                    multi_line_labels= [["NLL Loss"], ["Levenstein", "String-Level"]],
+                    save_path = args.loss_log, window=5, name = dt,
                     bound=[None, {"low": 0.0, "high": 100.0}],
-                    window=5)
-                # Val metrics
-                if val_set is not None:
-                    vb.plot_loss_distribution(val_losses, ["Levenstein", "String-Level"], args.loss_log,
-                                              dt + "_val", window=5, bound=[0.0, 100.0])
+                    titles=["Train Loss", "Validation Score"]
+                )
 
 if __name__ == "__main__":
     main()
