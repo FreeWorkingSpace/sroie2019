@@ -66,7 +66,7 @@ def fit(args, encoder, decoder, dataset, encode_optimizer, decode_optimizer, cri
                 # Calculate String Level Accuracy
                 correct = [100 if label == pred_str[i] else 0 for i, label in enumerate(label_str)]
                 Str_Accu.append(avg(correct))
-                #print_pred_and_label(pred_str, label_str, print_correct=True)
+                #print_pred_and_label(pred_str, label_str, print_correct=False)
         if is_train:
             args.curr_epoch += 1
             print(" --- Pred loss: %.4f, at epoch %04d, cost %.2f seconds ---" %

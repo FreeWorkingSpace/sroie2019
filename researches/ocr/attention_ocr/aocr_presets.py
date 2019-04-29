@@ -8,8 +8,8 @@ def GeneralPattern(args):
     args.random_order_load = False
     args.loading_threads = 3
     args.cover_exist = True
-    args.epoch_num = 100
-    args.finetune = False
+    args.epoch_num = 300
+    args.finetune = True
 
     args.img_channel = 3
     args.normalize_img = True

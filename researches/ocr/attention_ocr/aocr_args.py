@@ -91,7 +91,7 @@ def parse_arguments():
         "--decoder_rnn_layers",
         type=int,
         help="RNN layer (GRU) in decoder",
-        default=1
+        default=2
     )
     parser.add_argument(
         "-db",
