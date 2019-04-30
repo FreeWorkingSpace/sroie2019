@@ -62,13 +62,6 @@ def parse_arguments():
     #          MODEL         #
     ##############
     parser.add_argument(
-        "-eoc",
-        "--encoder_out_channel",
-        type=int,
-        help="Depth of output tensor of encoder CNN (Attn_CNN)",
-        default=128
-    )
-    parser.add_argument(
         "-attnl",
         "--attn_length",
         type=int,
@@ -93,13 +86,6 @@ def parse_arguments():
         help="RNN layer (GRU) in decoder",
         default=2
     )
-    parser.add_argument(
-        "-db",
-        "--decoder_bottleneck",
-        type=int,
-        help="Depth of output tensor of encoder CNN (Attn_CNN)",
-        default=3840
-    )
 
     ##############
     #        TRAINING        #
@@ -123,7 +109,7 @@ def parse_arguments():
         "--teacher_forcing_ratio",
         type=float,
         help="Initial value of teacher forcing rate (from 0.0 ~ 1.0)",
-        default=0.5
+        default=0.7
     )
     parser.add_argument(
         "-tfrd",
@@ -131,7 +117,7 @@ def parse_arguments():
         type=float,
         help="decay rate of teacher forcing rate in each epoch"
              "e.g. teacher_forcing_ratio *= teacher_forcing_ratio_decay",
-        default=0.95
+        default=1.0
     )
 
     return parser.parse_args()

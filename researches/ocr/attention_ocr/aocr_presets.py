@@ -27,8 +27,6 @@ def Unique_Patterns(args):
     args.epoches_per_phase = 1
 
     args.decoder_rnn_layers = 2
-    args.encoder_out_channel = 128
-    args.decoder_bottleneck = 3840
     
     args.resize_height = 48
     args.max_img_size = 960

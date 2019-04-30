@@ -38,7 +38,7 @@ def fit(args, encoder, decoder, dataset, encode_optimizer, decode_optimizer, cri
         decoder.eval()
     Loss = []
     Lev_Dis, Str_Accu = [], []
-    #decoder.module.teacher_forcing_ratio *= args.teacher_forcing_ratio_decay
+    decoder.module.teacher_forcing_ratio *= args.teacher_forcing_ratio_decay
     for epoch in range(args.epoches_per_phase):
         start_time = time.time()
         for batch_idx, data in enumerate(dataset):
@@ -137,7 +137,7 @@ def main():
                 lev_dises.append(lev_dis)
                 str_accus.append(str_accu)
                 val_scores = [np.asarray(lev_dises), np.asarray(str_accus)]
-            if epoch % 10 == 0:
+            if epoch % 5 == 0:
                 util.save_model(args, args.curr_epoch, encoder.state_dict(), prefix="encoder",
                                 keep_latest=20)
                 util.save_model(args, args.curr_epoch, decoder.state_dict(), prefix="decoder",
