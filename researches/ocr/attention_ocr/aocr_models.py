@@ -39,6 +39,9 @@ class Attn_CNN(nn.Module):
                                                      kernel_sizes=[[[3, 1], 1], [3, 1]], stride=[[1, 1], [1, 1]],
                                                      padding=[[[0, 0], 0], [[0, 1], 0]])
 
+        self.cnn.apply(init.init_others)
+        self.final_conv.apply(init.init_others)
+
     def forward(self, x):
         x = self.cnn(x)
         x = self.final_conv(x)
@@ -53,6 +56,9 @@ class BidirectionalLSTM(nn.Module):
         super().__init__()
         self.rnn = nn.LSTM(nIn, nHidden, bidirectional=True, batch_first=False)
         self.embedding = nn.Linear(nHidden * 2, nOut)
+
+        self.rnn.apply(init.init_rnn)
+        self.embedding.apply(init.init_others)
 
     def forward(self, input):
         self.rnn.flatten_parameters()
@@ -79,24 +85,19 @@ class AttnDecoder(nn.Module):
 
         self.embedding = nn.Embedding(self.output_size, self.hidden_size)
         self.attn = nn.Linear(self.hidden_size * 2, self.attn_length)
+        #self.attn = omth_blocks.fc_layer(self.hidden_size*2, self.attn_length, batch_norm=nn.BatchNorm1d)
         self.dropout = nn.Dropout(self.dropout_p)
         self.attn_combine = nn.Linear(self.hidden_size * 2, self.hidden_size)
-        self.gru = nn.GRU(self.hidden_size, self.hidden_size, num_layers=self.rnn_layers)
+        #self.attn_combine = omth_blocks.fc_layer(self.hidden_size*2, self.hidden_size, batch_norm=nn.BatchNorm1d)
+        self.gru = nn.GRU(self.hidden_size, self.hidden_size, num_layers=self.rnn_layers, batch_first=True)
+        self.gru_norm = nn.LayerNorm([1, self.hidden_size])
         self.out = nn.Linear(self.hidden_size, self.output_size)
-        
-    def _forward(self, input, hidden, x):
-        """
-        Unable to parallelize,
-        """
-        embedded = self.dropout(self.embedding(input))
-        attn_weights = self.attn(torch.cat((embedded.permute(1, 0, 2).squeeze(0), hidden[0]), 1))
-        attn_weights = F.softmax(attn_weights, dim=1).unsqueeze(1)
-        attn_applied = torch.matmul(attn_weights, x.permute(1, 0, 2))
-        output = self.attn_combine(torch.cat((attn_applied, embedded), dim=2).squeeze(1))
-        output = F.relu(output)
-        output, hidden = self.gru(output.unsqueeze(0), hidden)
-        output = F.log_softmax(self.out(output[0]), dim=1)
-        return output
+
+        self.embedding.apply(init.init_others)
+        self.attn.apply(init.init_others)
+        self.attn_combine.apply(init.init_others)
+        self.gru.apply(init.init_rnn)
+        self.out.apply(init.init_others)
 
     def forward(self, x, y, is_train=True, verbose=False):
         # Init
@@ -124,8 +125,9 @@ class AttnDecoder(nn.Module):
             attn_applied = torch.matmul(attn_weights, x.permute(1, 0, 2))
             output = self.attn_combine(torch.cat((attn_applied, embedded), dim=2).squeeze(1))
             output = F.relu(output)
-            output, hidden = self.gru(output.unsqueeze(0), hidden)
-            output = F.log_softmax(self.out(output[0]), dim=1)
+            output, hidden = self.gru(output.unsqueeze(1), hidden)
+            output = self.gru_norm(output)
+            output = F.log_softmax(self.out(output[:, 0, :]), dim=1)
             if verbose:
                 print("Step: %d, output=>%s, attn=>%s" %
                       (di, str(output.shape), str(attn_weights.shape)))

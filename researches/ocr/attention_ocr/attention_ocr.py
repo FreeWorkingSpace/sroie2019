@@ -51,7 +51,7 @@ def fit(args, encoder, decoder, dataset, encode_optimizer, decode_optimizer, cri
             loss = sum(loss) / len(loss)
             Loss.append(float(loss))
             pred_str, label_str = extract_string(invert_dict, outputs, label_batch)
-            if args.curr_epoch != 0 and args.curr_epoch % 10 == 0 and batch_idx == 0:
+            if args.curr_epoch != 0 and args.curr_epoch % 10 == 0 and batch_idx == 0 and not is_train:
                 visualize_attention(args.curr_epoch, img_batch, label_batch, attentions, pred_str, label_str)
             if is_train:
                 encode_optimizer.zero_grad()
@@ -121,10 +121,10 @@ def main():
                                                       prefix=["encoder", "decoder"], strict=False)
         
         # Prepare loss function and optimizer
-        encoder_optimizer = AdaBound(encoder.parameters(),
-                                     lr=args.learning_rate, weight_decay=args.weight_decay)
-        decoder_optimizer = AdaBound(decoder.parameters(),
-                                     lr=args.learning_rate, weight_decay=args.weight_decay)
+        encoder_optimizer = AdaBound(encoder.parameters(), lr=args.learning_rate,
+                                     final_lr=args.learning_rate * 10, weight_decay=args.weight_decay)
+        decoder_optimizer = AdaBound(decoder.parameters(), lr=args.learning_rate,
+                                     final_lr=args.learning_rate * 10, weight_decay=args.weight_decay)
 
         for epoch in range(args.epoch_num):
             loss = fit(args, encoder, decoder, train_set, encoder_optimizer,

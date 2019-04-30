@@ -34,7 +34,7 @@ def parse_arguments():
         "--datasets",
         nargs='+',
         help="a list folder/folders to use as training set",
-        default=["SROIE2019_OCR_0"]
+        default=["SROIE2019_OCR_1_1"]
     )
     parser.add_argument(
         "-rh",
@@ -55,7 +55,7 @@ def parse_arguments():
         "--max_str_size",
         type=int,
         help="label string will be pad/crop with EOS if its length is shorter/longer than this value",
-        default=30
+        default=50
     )
     
     ##############
@@ -123,7 +123,7 @@ def parse_arguments():
         "--teacher_forcing_ratio",
         type=float,
         help="Initial value of teacher forcing rate (from 0.0 ~ 1.0)",
-        default=0.7
+        default=0.5
     )
     parser.add_argument(
         "-tfrd",

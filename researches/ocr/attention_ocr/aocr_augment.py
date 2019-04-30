@@ -13,4 +13,7 @@ def aug_aocr(args, bg_color=255):
     aug_list.append(augmenters.PadToFixedSize(
         height=args.resize_height, width=args.max_img_size, pad_cval=bg_color)
     )
+    aug_list.append(augmenters.CropToFixedSize(
+        height=args.resize_height, width=args.max_img_size, position="left-top")
+    )
     return aug_list

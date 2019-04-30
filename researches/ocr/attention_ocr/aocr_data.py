@@ -31,7 +31,7 @@ def read_img_and_label(args, items, seed, size, pre_process, rand_aug, bbox_load
     if len(label) > args.max_str_size - 2:
         # Characters in label exceed the maxium predictable string length(args.max_str_size)
         print("label in %s exceed max_str_size %s by %s"
-              %(path, args.max_str_size - 2, len(label) - args.args.max_str_size + 2))
+              %(path, args.max_str_size - 2, len(label) - args.max_str_size + 2))
         label = [args.label_dict["SOS"]] + label[: args.max_str_size - 2] + [args.label_dict["EOS"]]
     else:
         # Pad the label using EOS token
