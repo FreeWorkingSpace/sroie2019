@@ -35,39 +35,37 @@ def get_task_word_freq(root_path):
     print("word_freq for %s has %d keys."%(root_path, len(word_freq.keys())))
     return word_freq
 
-def get_task_1_2_key_info():
+def get_task_1_2_key_info(task_1_2_label_root, keys=["company", "address", "date"], split_word=True):
     # get top 1000 frequent words from task1_2
     text_files = glob.glob(task_1_2_label_root + "/*.txt")
-    company_freq = {}
-    address_freq = {}
+    key_dict = [{}, {}, {}]
     print("Enumerating through %d files in %s"%(len(text_files), task_1_2_label_root))
-    for i, text_file in enumerate(text_files):
-        with open(text_file, "r") as file:
-            data = json.load(file)
-            words = data["company"].strip().split(" ")
-            for word in words:
-                if has_number(word):
+    for j, key in enumerate(keys):
+        for i, text_file in enumerate(text_files):
+            with open(text_file, "r") as file:
+                data = json.load(file)
+                try:
+                    words = data[key]
+                except KeyError:
+                    #print(data)
                     continue
-                if word in company_freq:
-                    company_freq[word] += 1
+                if split_word:
+                    words = words.strip().split(" ")
+                    for word in words:
+                        if has_number(word):
+                            continue
+                        if word in key_dict[j]:
+                            key_dict[j][word] += 1
+                        else:
+                            key_dict[j].update({word: 1})
                 else:
-                    company_freq.update({word: 1})
-            try:
-                words = data["address"].strip().split(" ")
-            except KeyError:
-                print(data)
-                continue
-            for word in words:
-                if has_number(word):
-                    continue
-                if word in address_freq:
-                    address_freq[word] += 1
-                else:
-                    address_freq.update({word: 1})
-    #frequency_com = sorted(company_freq.items(), key = lambda kv:(kv[1], kv[0]))
-    print("company_freq for task_1_2_text has %d keys."%len(company_freq.keys()))
-    print("address_freq for task_1_2_text has %d keys."%len(address_freq.keys()))
-    return company_freq, address_freq
+                    word = words.strip()
+                    if word in key_dict[j]:
+                        key_dict[j][word] += 1
+                    else:
+                        key_dict[j].update({word: 1})
+        print("%s_freq for task_1_2_text has %d keys." % (keys[j], len(key_dict[j].keys())))
+    return key_dict
 
 def get_vocab():
     vocab_text_file = join(bert_root, bert_model, "vocab.txt")
