@@ -77,8 +77,10 @@ def create_bert_train_tsv(text_root, json_root, bert_root, task_for="company"):
     print("Total %s samples contain %d positive and %d negative samples."%(write_lines, positive_samples, negative_samples))
     print("")
     val.close()
-    return
 
+def create_bert_test_tsv(text_root, bert_root, task_for):
+    test = open(join(bert_root, "sroie_%s" % (task_for), "dev.tsv"), "w")
+    task_3_vocab = get_task_word_freq(text_root)
 
 if __name__ is "__main__":
     bert_root = expanduser("~/Documents/bert")
