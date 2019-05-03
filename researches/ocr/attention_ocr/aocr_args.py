@@ -55,7 +55,7 @@ def parse_arguments():
         "--max_str_size",
         type=int,
         help="label string will be pad/crop with EOS if its length is shorter/longer than this value",
-        default=50
+        default=80
     )
     
     ##############
