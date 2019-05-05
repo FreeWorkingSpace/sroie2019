@@ -200,7 +200,7 @@ if __name__ == "__main__":
               if task == "date":
                 if is_date(key_info):
                   print("Another date: %s"%key_info)
-                #pass
+                pass
               else:
                 result[task] += (" " + key_info)
             else:
