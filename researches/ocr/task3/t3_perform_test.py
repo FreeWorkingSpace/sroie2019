@@ -163,6 +163,7 @@ if __name__ == "__main__":
     for i, num in enumerate(num_list):
         text_file_name = text_files[i][text_files[i].rfind("/") + 1 : -4]
         if text_file_name not in size_dict:
+            start += num
             # this sample does not exist in the task 3 test set
             continue
         print("%d: %s"%(i, text_file_name))
@@ -176,9 +177,9 @@ if __name__ == "__main__":
         result = {}
         for j, task in enumerate(args.sequence):
             #print("Task: %s matched %d."%(task, np.sum(idx[j])))
-            if task == "company" and i > 81:
+            #if task == "company" and i > 81:
                 # force the algorithm to use rule-based method to find company name
-                idx[j] = [0]
+                #idx[j] = [0]
             if np.sum(idx[j]) == 0:
                 # Use rule-based method
                 if task == "date":
@@ -351,19 +352,25 @@ if __name__ == "__main__":
         elif len(ver_coords_total) > 4 and len(total_coord) > 5 and calculated_total < number_form((total_price)):
             total_price = calculated_total
         
-        result.update({"total": total_price})
+        result.update({"total": format_price(total_price)})
+        final_txt = ["{\n"]
+        for key in ["company", "date", "address", "total"]:
+            try:
+                content = result[key]
+            except KeyError:
+                content = " "
+            if key == "total":
+                final_txt.append('    "%s": "%s"\n' % (key, content))
+            else:
+                final_txt.append('    "%s": "%s",\n' % (key, content))
+            print('\t%s: %s' % (key, content))
+        final_txt.append("}\n")
+        print("")
         
         # Write to file in JSON format
         with open(join(output_dir, text_file_name + ".txt"), "w") as file:
-            file.write("{\n")
-            for key in ["company", "date", "address", "total"]:
-                try:
-                    file.write('    "%s": "%s",\n' % (key, result[key]))
-                    print('\t"%s": "%s"' % (key, result[key]))
-                except KeyError:
-                    continue
-            file.write("}\n")
-        print("")
+            for txt in final_txt:
+                file.write(txt)
         file.close()
         #json.dump(result, file)
         start += num

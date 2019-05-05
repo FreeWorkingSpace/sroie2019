@@ -78,6 +78,8 @@ def number_form(text):
     
     
 def format_price(text):
+    if type(text) in [float, int]:
+        text = str(text)
     idx = text.rfind(".")
     if idx == -1:
         # cannot find "." in the string
