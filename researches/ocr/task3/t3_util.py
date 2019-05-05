@@ -1,44 +1,58 @@
 from os.path import *
 import glob, json
 
-bert_root = expanduser("~/Documents/bert")
-bert_model = "uncased_L-12_H-768_A-12"
-
-task_1_2_text_root = expanduser("~/Pictures/dataset/ocr/SROIE2019")
-task_1_2_label_root = expanduser("~/Downloads/task_1_2_label")
-task_3_text_root = expanduser("~/Downloads/task_3_label")
 
 def has_number(inputString):
     return any(char.isdigit() for char in inputString)
 
-def get_task_word_freq(root_path):
+
+def is_number(inputString):
+    return all(char.isdigit() for char in inputString)
+
+
+def get_word_frequency(root_path):
     # get top 1000 frequent words from task1_2
-    text_files = glob.glob(root_path + "/*.txt")
+    text_files = sorted(glob.glob(root_path + "/*.txt"))
     word_freq = {}
     print("Enumerating through %d files in %s"%(len(text_files), root_path))
     for i, text_file in enumerate(text_files):
         with open(text_file, "r") as txt_lines:
-            try:
-                for j, line in enumerate(txt_lines):
-                    line_element = line.split(",")
-                    text_label = ",".join(line_element[8:])
-                    words = text_label.strip().split(" ")
-                    for word in words:
-                        if has_number(word):
-                            continue
-                        if word in word_freq:
-                            word_freq[word] += 1
-                        else:
-                            word_freq.update({word: 1})
-            except UnicodeDecodeError:
-                print(text_file)
+            for j, line in enumerate(txt_lines):
+                line_element = line.split(",")
+                text_label = ",".join(line_element[8:])
+                words = text_label.strip().split(" ")
+                for word in words:
+                    if has_number(word):
+                        continue
+                    if word in word_freq:
+                        word_freq[word] += 1
+                    else:
+                        word_freq.update({word: 1})
     print("word_freq for %s has %d keys."%(root_path, len(word_freq.keys())))
     return word_freq
 
-def get_task_1_2_key_info(task_1_2_label_root, keys=["company", "address", "date"], split_word=True):
+
+def read_all_files_lines(root_path):
     # get top 1000 frequent words from task1_2
-    text_files = glob.glob(task_1_2_label_root + "/*.txt")
-    key_dict = [{}, {}, {}]
+    text_files = sorted(glob.glob(root_path + "/*.txt"))
+    line_list = []
+    print("Enumerating through %d files in %s"%(len(text_files), root_path))
+    for i, text_file in enumerate(text_files):
+        with open(text_file, "r") as txt_lines:
+            for j, line in enumerate(txt_lines):
+                line_element = line.split(",")
+                text_label = " ".join(line_element[8:])
+                line_list.append(text_label)
+    return line_list
+
+
+def get_key_info(task_1_2_label_root, keys=("company", "address", "date"),
+                 split_word=True):
+    # get top 1000 frequent words from task1_2
+    text_files = sorted(glob.glob(task_1_2_label_root + "/*.txt"))
+    key_dict = []
+    for i in range(len(keys)):
+        key_dict.append({})
     print("Enumerating through %d files in %s"%(len(text_files), task_1_2_label_root))
     for j, key in enumerate(keys):
         for i, text_file in enumerate(text_files):
@@ -54,6 +68,8 @@ def get_task_1_2_key_info(task_1_2_label_root, keys=["company", "address", "date
                     for word in words:
                         if has_number(word):
                             continue
+                        word = word.replace(".", "").replace("(", "").replace(")", "") \
+                            .replace(",", "").replace("[", "").replace("]", "")
                         if word in key_dict[j]:
                             key_dict[j][word] += 1
                         else:
@@ -64,10 +80,11 @@ def get_task_1_2_key_info(task_1_2_label_root, keys=["company", "address", "date
                         key_dict[j][word] += 1
                     else:
                         key_dict[j].update({word: 1})
-        print("%s_freq for task_1_2_text has %d keys." % (keys[j], len(key_dict[j].keys())))
+        print("%s_freq for task_1_2_text has %d keys." %
+              (keys[j], len(key_dict[j].keys())))
     return key_dict
 
-def get_vocab():
+def get_bert_model_vocab(bert_root, bert_model):
     vocab_text_file = join(bert_root, bert_model, "vocab.txt")
     vocabulary = set([])
     with open(vocab_text_file, "r", encoding="utf-8") as vocab_lines:
@@ -117,9 +134,15 @@ def combine_multi_vocabs(list_of_vocab):
 
 
 if __name__ is "__main__":
-    vocabulary = get_vocab()
-    task_1_2_vocab = get_task_word_freq(task_1_2_text_root)
-    task_3_vocab = get_task_word_freq(task_3_text_root)
+    bert_root = expanduser("~/Documents/bert")
+    bert_model = "uncased_L-12_H-768_A-12"
+    task_1_2_text_root = expanduser("~/Pictures/dataset/ocr/SROIE2019")
+    task_1_2_label_root = expanduser("~/Downloads/task_1_2_label")
+    task_3_text_root = expanduser("~/Downloads/task_3_label")
+
+    vocabulary = get_bert_model_vocab()
+    task_1_2_vocab = get_word_frequency(task_1_2_text_root)
+    task_3_vocab = get_word_frequency(task_3_text_root)
     cleaned_vocab = clean_existed_vocab([task_1_2_vocab, task_3_vocab], vocabulary)
     task_1_2_unique, task_3_unique, intersect = compare_two_vocab(cleaned_vocab[0], cleaned_vocab[1])
     print("Word only exist in task_1_2 are: %d"%(len(task_1_2_unique)))
