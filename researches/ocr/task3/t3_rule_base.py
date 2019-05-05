@@ -1,9 +1,9 @@
 from researches.ocr.task3.t3_util import *
 
+month = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN",
+           "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"]
 
 def is_date(text):
-  month = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN",
-           "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"]
   ind_text = text.replace("[", "").replace("]", "").replace(":", "")\
     .replace(" ", "")
   extra_indicator = len(ind_text.split("/")) == 3 or \
@@ -14,10 +14,13 @@ def is_date(text):
       split = ind_text.split("/")
     if len(ind_text.split("-")) == 3:
       split = ind_text.split("-")
+    if any([char in [",", "."] for char in split[1]]):
+      return False
     if is_number(split[0][-2:]) and is_number(split[-1][:2]):
       pass
     elif split[1].upper() in month:
       pass
+
     else:
       return False
     if len(ind_text.split("-")) > 1:
@@ -28,8 +31,60 @@ def is_date(text):
   return extra_indicator
 
 
-def correct_date(text, split_mode=None):
-  pass
+def correct_date(text):
+
+  def get_year(_split):
+    if len(_split[2]) >= 4 and is_number(_split[2][:4]):
+      year = _split[2][:4]
+    elif len(_split[2]) < 4 and is_number(_split[2][:2]):
+      year = _split[2][:2]
+    else:
+      if len(_split[2].split(" ")) > 1:
+        if is_number(_split[2].split(" ")[0]):
+          year = _split[2].split(" ")[0]
+        else:
+          year = ""
+      else:
+        year = ""
+    return year
+
+  if len(text.split("/")) == 3:
+    split = text.split("/")
+    year = get_year(split)
+    return "/".join([split[0][-2:], split[1], year])
+  elif len(text.split("-")) == 3:
+    split = text.split("-")
+    year = get_year(split)
+    return "-".join([split[0][-2:], split[1], year])
+  elif len(text.split(".")) >= 3:
+      split = text.split(".")
+      year = get_year(split)
+      return ".".join([split[0][-2:], split[1], year])
+
+  elif len(text.split(" ")) >= 3:
+    split = text.split(" ")
+    for i, string in enumerate(split):
+      if string.upper() in month:
+        return " ".join([split[i - 1], split[i], split[i + 1]])
+    return text
+  else:
+    print("Invalid date format: %s" % text)
+    return text
+
+
+def correct_company(text):
+  # Eliminate the (xxxxxxxxx) at the end
+  text = text.replace(",", "").replace("  ", "")
+  text = text.strip(" ")
+  if len(text.split("(")) > 1:
+    latter = text.split("(")[-1]
+    if len(latter.split(" ")) == 1:
+      # means (xxxxxxxxx) at the end
+      return text.split("(")[0].strip(" ")
+    else:
+      return text
+  else:
+    return text
 
 
 def get_height_of_line(text):
@@ -41,5 +96,4 @@ def get_height_of_line(text):
 
 
 if __name__ == "__main__":
-  string = "DATE: 22-03-2018 04:01:20 PM"
-  print(is_date(string))
+  print(is_date("16-667 0982 , 016-333"))

@@ -25,11 +25,13 @@ for text_file in text_files:
   except FileNotFoundError:
     continue
   company = key_info["company"]
+  print(company)
   date = key_info["date"]
   text_lines = open(text_file, "r").readlines()
   for i, line in enumerate(text_lines):
     if any([m in date.upper() for m in month]):
-      print(name)
+      #print(name)
+      pass
     if company in line:
       if str(i) not in statistics:
         statistics.update({str(i):1})
