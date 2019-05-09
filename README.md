@@ -15,24 +15,23 @@ pip install -r requirements.txt
 
 
 ## Prepare Data
-1. Download dataset from SROIE 2019
+1. Download dataset from SROIE 2019 to PATH_TO_DATASET
 2. Create path ~/Pictures/dataset/ocr/ and move SROIE dataset under it
 ```
 cd ~/Pictures
 mkdir dataset
 cd dataset
 mkdir ocr
-# 移动至数据集文件夹所在位置
 cd PATH_TO_DATASET
-# 重命名下载后的数据集文件夹
-mv PATH_TO_DATASET/DATSET_NAME PATH_TO_DATASET/SROIE2019
-# 将数据集移动到指定位置
+# rename dataset
+mv PATH_TO_DATASET/DATASET_NAME PATH_TO_DATASET/SROIE2019
+# move dataset
 mv -r PATH_TO_DATASET/SROIE2019 ~/Pictures/dataset/ocr/
 ```
 
 ### Training
 ```
-# Running in Terminal
+# Run in Terminal
 cd ~/Documents/sroie2019/researches/ocr/textbox
 python3 textbox.py
 ```
@@ -40,7 +39,7 @@ python3 textbox.py
 
 ### Testing
 ```
-# Running in Terminal
+# Run in Terminal
 cd ~/Documents/sroie2019/researches/ocr/textbox
 python3 tb_test.py -mpl tb_003_3.py
 ```
