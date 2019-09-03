@@ -1,4 +1,4 @@
-# SROIE 2019 Task 1
+# SROIE 2019
 
 
 ## Installation
@@ -36,10 +36,15 @@ cd ~/Documents/sroie2019/researches/ocr/textbox
 python3 textbox.py
 ```
 
-
 ### Testing
 ```
 # Run in Terminal
 cd ~/Documents/sroie2019/researches/ocr/textbox
-python3 tb_test.py -mpl tb_003_3.py
+python3 tb_test.py (some args)
+```
+
+## Pretrained Model for Task1
+The F1-score on SROIE 2019 test set is expected to be 94%.
+```
+https://drive.google.com/open?id=1uZnBuLm_DLKwNukYhwbrbDxUmLa2XtPe
 ```
